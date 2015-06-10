@@ -1,10 +1,12 @@
-# simian
+# Simian JIT PDES
 
 Nandakishore Santhi <nsanthi@lanl.gov>
 
 ================================================================================================
 Simian Process Oriented Conservative Parallel Discrete Event Simulator from LANL
 ================================================================================================
+
+Simian contains the Lua implementation and it needs luajit-2.1. SimianPie contains the Python implementation, which needs Python 2.7.x with greenlets (optional). MPICH 3.1.4 or OpenMPI 1.6.x are optionally needed if using MPI.
 
 See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. Example.Py has examples of SimianPie usage.
 
@@ -23,7 +25,7 @@ To use the Python version SimianPie:
         Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory or pass absolute path to the library to Simian() when creating the engine.
 
 Test with pHold app without MPI:
-    luajit-2.1.0-alpha Examples.Lua/phold-noop-noMPI.lua
+    luajit Examples.Lua/phold-noop-noMPI.lua
 
 Testing with MPI on LANL PDES benchmark app on medium cluster with more than 1000 cores:
     mpirun -np 1000 luajit-2.1.0-alpha Examples.Lua/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
