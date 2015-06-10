@@ -3,7 +3,7 @@
 Nandakishore Santhi <nsanthi@lanl.gov>
 
 ================================================================================================
-Simian Process Oriented Conservative Parallel Discrete Event Simulator from LANL, source package
+Simian Process Oriented Conservative Parallel Discrete Event Simulator from LANL
 ================================================================================================
 
 See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. Example.Py has examples of SimianPie usage.
