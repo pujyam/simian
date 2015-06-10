@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=640">
+
+    <link rel="stylesheet" href="stylesheets/core.css" media="screen">
+    <link rel="stylesheet" href="stylesheets/mobile.css" media="handheld, only screen and (max-device-width:640px)">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+
+    <script type="text/javascript" src="javascripts/modernizr.js"></script>
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script type="text/javascript" src="javascripts/headsmart.min.js"></script>
+    <script type="text/javascript">
+      $(document).ready(function () {
+        $('#main_content').headsmart()
+      })
+    </script>
+    <title>Simian by pujyam</title>
+  </head>
+
+  <body>
+    <a id="forkme_banner" href="https://github.com/pujyam/simian">View on GitHub</a>
+    <div class="shell">
+
+      <header>
+        <span class="ribbon-outer">
+          <span class="ribbon-inner">
+            <h1>Simian</h1>
+            <h2>Simian Process Oriented Conservative JIT PDES from LANL</h2>
+          </span>
+          <span class="left-tail"></span>
+          <span class="right-tail"></span>
+        </span>
+      </header>
+
+      <section id="downloads">
+        <span class="inner">
+          <a href="https://github.com/pujyam/simian/zipball/master" class="zip"><em>download</em> .ZIP</a><a href="https://github.com/pujyam/simian/tarball/master" class="tgz"><em>download</em> .TGZ</a>
+        </span>
+      </section>
+
+
+      <span class="banner-fix"></span>
+
+
+      <section id="main_content">
+        <h1></h1>
+
+<h1>
+<a id="simian-jit-compiled-process-oriented-conservative-parallel-discrete-event-simulator-from-lanl" class="anchor" href="#simian-jit-compiled-process-oriented-conservative-parallel-discrete-event-simulator-from-lanl" aria-hidden="true"><span class="octicon octicon-link"></span></a>Simian JIT compiled, Process Oriented Conservative Parallel Discrete Event Simulator from LANL</h1>
+
+<p>Nandakishore Santhi <a href="mailto:nsanthi@lanl.gov">nsanthi@lanl.gov</a></p>
+
+<p>Simian is a just-in-time compiled, process oriented, conservative parallel discrete event simulator from LANL with proven scaling performance. It aims to introduce JIT compilation to the mature PDES community, while at the same time introducing a limited form of structured parallelism to the JIT community. Using Simian, a user can write a discrete time simulation model at an appropriate level of abstraction of any system, using just a few lines of code. The user can then run the simulation model either in a sequential manner (without using MPI) or in a parallel fashion, using MPI.</p>
+
+<h2>
+<a id="directory-structure" class="anchor" href="#directory-structure" aria-hidden="true"><span class="octicon octicon-link"></span></a>Directory structure:</h2>
+
+<p>Simian directory contains the Lua implementation and it needs luajit-2.1.</p>
+
+<p>SimianPie directory contains the Python implementation, which needs Python 2.7.x with greenlets (optional) or Pypy 2.4.x.</p>
+
+<p>MPICH 3.1.4 or OpenMPI 1.6.x are optionally needed if using MPI.</p>
+
+<p>See Docs directory for API documentation. Example.Lua directory has examples of Simian (Lua) usage. Example.Py directory has examples of SimianPie usage.</p>
+
+<h2>
+<a id="if-not-using-mpi" class="anchor" href="#if-not-using-mpi" aria-hidden="true"><span class="octicon octicon-link"></span></a>If not using MPI:</h2>
+
+<pre><code>Set useMPI flag to false when initializing the Simian PDES Engine
+</code></pre>
+
+<h2>
+<a id="to-use-mpi-with-simian-lua" class="anchor" href="#to-use-mpi-with-simian-lua" aria-hidden="true"><span class="octicon octicon-link"></span></a>To use MPI with Simian (Lua):</h2>
+
+<h3>
+<a id="if-using-mpich" class="anchor" href="#if-using-mpich" aria-hidden="true"><span class="octicon octicon-link"></span></a>If using MPICH:</h3>
+
+<pre><code>(tested with 3.1.3)
+Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory
+</code></pre>
+
+<h3>
+<a id="if-using-openmpi" class="anchor" href="#if-using-openmpi" aria-hidden="true"><span class="octicon octicon-link"></span></a>If using OpenMPI:</h3>
+
+<pre><code>(some later versions such as 1.8.3 have a serious bug in message size reporting; use 1.6.x)
+Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
+</code></pre>
+
+<h2>
+<a id="to-use-the-python-version-simianpie" class="anchor" href="#to-use-the-python-version-simianpie" aria-hidden="true"><span class="octicon octicon-link"></span></a>To use the Python version SimianPie:</h2>
+
+<pre><code>SimianPie is tested to work with CPython 2.7.x and PyPy 2.4.x
+At present when needing MPI, SimianPie works with either MPICH2 using CTypes or using MPI4Py module - if only OpenMPI is available use Simian (Lua) or if Python version is unavoidable, then user should write a CTypes wrapper for OpenMPI similar to the distributed CTyped wrapper for MPICH 3.1.3
+Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory or pass absolute path to the library to Simian() when creating the engine.
+</code></pre>
+
+<h2>
+<a id="test-with-phold-app-without-mpi" class="anchor" href="#test-with-phold-app-without-mpi" aria-hidden="true"><span class="octicon octicon-link"></span></a>Test with pHold app without MPI:</h2>
+
+<pre><code>luajit Examples.Lua/phold-noop-noMPI.lua
+</code></pre>
+
+<h2>
+<a id="testing-with-mpi-on-lanl-pdes-benchmark-app" class="anchor" href="#testing-with-mpi-on-lanl-pdes-benchmark-app" aria-hidden="true"><span class="octicon octicon-link"></span></a>Testing with MPI on LANL PDES benchmark app:</h2>
+
+<pre><code>(on a medium sized cluster with more than 1000 cores)
+mpirun -np 1000 luajit-2.1.0-alpha Examples.Lua/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
+</code></pre>
+
+<h2>
+<a id="lanl-internal-reference" class="anchor" href="#lanl-internal-reference" aria-hidden="true"><span class="octicon octicon-link"></span></a>LANL internal reference:</h2>
+
+<p>CODE Title: Simian, version 1.5 (OSS)</p>
+
+<p>LACC #:  LA-CC-15-015</p>
+
+<p>Copyright Number Assigned: C15036</p>
+
+<p>Funding source: Laboratory-Directed Research and Development (LDRD)</p>
+      </section>
+
+      <footer>
+        <span class="ribbon-outer">
+          <span class="ribbon-inner">
+            <p>this project by <a href="https://github.com/pujyam">pujyam</a> can be found on <a href="https://github.com/pujyam/simian">GitHub</a></p>
+          </span>
+          <span class="left-tail"></span>
+          <span class="right-tail"></span>
+        </span>
+        <p>Generated with <a href="https://pages.github.com">GitHub Pages</a> using Merlot</p>
+        <span class="octocat"></span>
+      </footer>
+
+    </div>
+
+    
+  </body>
+</html>
