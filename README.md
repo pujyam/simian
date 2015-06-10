@@ -37,6 +37,9 @@ See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. 
 
 ##LANL internal reference:
 CODE Title: Simian, version 1.5 (OSS)
+
 LACC #:  LA-CC-15-015
+
 Copyright Number Assigned: C15036
+
 Funding source: Laboratory-Directed Research and Development (LDRD)
