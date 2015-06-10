@@ -14,13 +14,14 @@ See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. 
     Set useMPI flag to false when initializing the Simian PDES Engine
 
 #To use MPI with Simian (Lua):
-    If using MPICH: (tested with 3.1.3)
 
-        Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory
+##If using MPICH:
+    (tested with 3.1.3)
+    Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory
 
-    If using OpenMPI: (some later versions such as 1.8.3 have a serious bug in message size reporting; use 1.6.x)
-
-        Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
+##If using OpenMPI:
+    (some later versions such as 1.8.3 have a serious bug in message size reporting; use 1.6.x)
+    Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
 
 #To use the Python version SimianPie:
     SimianPie is tested to work with CPython 2.7.x and PyPy 2.4.x
