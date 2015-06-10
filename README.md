@@ -34,3 +34,9 @@ See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. 
 ##Testing with MPI on LANL PDES benchmark app:
     (on a medium sized cluster with more than 1000 cores)
     mpirun -np 1000 luajit-2.1.0-alpha Examples.Lua/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
+
+##LANL internal reference:
+CODE Title: Simian, version 1.5 (OSS)
+LACC #:  LA-CC-15-015
+Copyright Number Assigned: C15036
+Funding source: Laboratory-Directed Research and Development (LDRD)
