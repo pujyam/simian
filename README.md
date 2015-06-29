@@ -4,7 +4,7 @@
 Simian Process Oriented Conservative Parallel Discrete Event Simulator from LANL
 =================================================================================
 
-Nandakishore Santhi <nsanthi at lanl dot gov>
+Nandakishore Santhi (nsanthi at lanl dot gov)
 
 Simian contains the Lua implementation and it needs luajit-2.1. SimianPie contains the Python implementation, which needs Python 2.7.x with greenlets (optional) or Pypy 2.4.x. MPICH 3.1.4 or OpenMPI 1.6.x are optionally needed if using MPI.
 
