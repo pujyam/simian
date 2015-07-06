@@ -56,6 +56,19 @@
 <p>Simian is a just-in-time compiled, process oriented, conservative parallel discrete event simulator from LANL with proven scaling performance. It aims to introduce JIT compilation to the mature PDES community, while at the same time introducing a limited form of structured parallelism to the JIT community. Using Simian, a user can write a discrete time simulation model at an appropriate level of abstraction of any system, using just a few lines of code. The user can then run the simulation model either in a sequential manner (without using MPI) or in a parallel fashion, using MPI.</p>
 
 <h2>
+<a id="why-should-you-try-out-simian" class="anchor" href="#why-should-you-try-out-simian" aria-hidden="true"><span class="octicon octicon-link"></span></a>Why Should You Try Out Simian:</h2>
+
+<p>Programmer productivity is improved through exclusive use of scripting interface in Python or Lua for describing the PDES models.</p>
+
+<p>Small code base (&lt;600 lines with comments for core parts)</p>
+
+<p>Extremely competitive in simulation speed in terms of events/second. Simian reaches sequential simulation speeds up to 1.8 million events/sec on a pHold type example application.</p>
+
+<p>Your models work either with or without MPI (either MPICH2 or OpenMPI) with no change to your code for quick prototyping</p>
+
+<p>Mix event based and process-oriented simulation techniques at the same time</p>
+
+<h2>
 <a id="directory-structure" class="anchor" href="#directory-structure" aria-hidden="true"><span class="octicon octicon-link"></span></a>Directory structure:</h2>
 
 <p>Simian directory contains the Lua implementation and it needs luajit-2.1.</p>
