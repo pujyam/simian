@@ -263,9 +263,10 @@ local function Entity(name, base)
     c.__index = c --Class-methods are looked up in this table by entity-instances
 
     local mt = {
-        __call = function(entityTable, out, engine, num, ...)
+        __call = function(entityTable, name, out, engine, num, ...)
             --Constructor to be called as <entityName>(<args>)
             local obj = {
+                name = name, --Explicit instance name
                 out = out, --Log file for this instance
                 engine = engine, --Engine
                 num = num, --Serial Number

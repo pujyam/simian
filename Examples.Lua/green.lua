@@ -54,7 +54,7 @@ end
 --Initialize Simian
 Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
-Simian:addEntity(Node, 1)
+Simian:addEntity("Node", Node, 1)
 
 Simian:run()
 Simian:exit()

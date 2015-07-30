@@ -203,7 +203,7 @@ function Simian.attachService(self, klass, name, fun)
     rawset(klass, name, fun)
 end
 
-function Simian.addEntity(self, entityClass, num, ...)
+function Simian.addEntity(self, name, entityClass, num, ...)
     --[[Purpose: Add an entity to the entity-list if Simian is idle
     This function takes a pointer to a class from which the entities can
     be constructed, a name, and a number for the instance.]]
@@ -211,7 +211,6 @@ function Simian.addEntity(self, entityClass, num, ...)
         error("Adding entity when Simian is running!")
     end
 
-    local name = entityClass.name
     if not self.entities[name] then
         self.entities[name] = {} --To hold entities of this "name"
     end
@@ -224,7 +223,7 @@ function Simian.addEntity(self, entityClass, num, ...)
         --Output log file for this Entity
         self.out:write(name .. "[" .. num .. "]: Running on rank " .. computedRank .. "\n")
 
-        entity[num] = entityClass(self.out, self, num, ...) --Entity is instantiated
+        entity[num] = entityClass(name, self.out, self, num, ...) --Entity is instantiated
     end
 end
 

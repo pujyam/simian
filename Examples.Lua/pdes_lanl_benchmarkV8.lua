@@ -379,7 +379,7 @@ end
 -- "MAIN"
 ----------------------------------------------------------------
 for i=0,n_ent-1 do
-    Simian:addEntity(PDES_LANL_Node, i)
+    Simian:addEntity("PDES_LANL_Node", PDES_LANL_Node, i)
 end
 
 -- 5. Run Simian

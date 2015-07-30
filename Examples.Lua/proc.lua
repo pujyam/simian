@@ -70,7 +70,7 @@ end
 Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
 for i=1,count do
-    Simian:addEntity(Node, i)
+    Simian:addEntity("Node", Node, i)
 end
 
 for i=1,count do

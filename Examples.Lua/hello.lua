@@ -101,8 +101,8 @@ end
 Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
 for i=0,count-1 do
-    Simian:addEntity(Alice, i)
-    Simian:addEntity(Bob, i)
+    Simian:addEntity("Alice", Alice, i)
+    Simian:addEntity("Bob", Bob, i)
 end
 
 for i=0,count-1 do

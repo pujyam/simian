@@ -49,7 +49,7 @@ end
 Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
 for i=0,count-1 do
-    Simian:addEntity(Node, i)
+    Simian:addEntity("Node", Node, i)
 end
 
 for i=0,count-1 do
