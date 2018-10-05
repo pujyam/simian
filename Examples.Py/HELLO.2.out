@@ -1,8 +1,0 @@
-===========================================
-----------SIMIAN-PIE PDES ENGINE-----------
-===========================================
-MPI: ON
-
-Alice[2]: Running on rank 2
-Bob[3]: Running on rank 2
-Alice(2): Time 0: Sending 42 to Bob[2]
