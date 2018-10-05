@@ -11,6 +11,8 @@
 
 #Author: Nandakishore Santhi
 #Date: 23 November, 2014
+#Author: Christopher Hannon
+#Date: 5 October, 2018
 #Copyright: Open source, must acknowledge original author
 #Purpose: PDES Engine in Python, mirroring a subset of the Simian JIT-PDES
 #  Main simumation engine class
