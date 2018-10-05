@@ -1,0 +1,13 @@
+===========================================
+----------SIMIAN-PIE PDES ENGINE-----------
+===========================================
+MPI: ON
+
+Node[1]: Running on rank 0
+Node[5]: Running on rank 0
+Node[9]: Running on rank 0
+Node[13]: Running on rank 0
+Node[17]: Running on rank 0
+Node[21]: Running on rank 0
+Node[25]: Running on rank 0
+Node[29]: Running on rank 0

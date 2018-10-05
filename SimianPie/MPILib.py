@@ -40,6 +40,7 @@ class MPI(object):
         self.comm = mpi.MPI_COMM_WORLD
         self.BYTE = mpi.MPI_BYTE
         self.DOUBLE = mpi.MPI_DOUBLE
+        self.LONG = mpi.MPI_LONG
         self.MIN = mpi.MPI_MIN
         self.SUM = mpi.MPI_SUM
 
@@ -49,6 +50,11 @@ class MPI(object):
         self.dtemp0 = C.c_double()
         self.dtemp1 = C.c_double()
         self.ctemp = C.create_string_buffer(self.CBUF_LEN) #Preallocate
+
+        self.numRanks = self.size()
+        self.sndCounts = (C.c_long * self.numRanks)()
+        for i in range(len(self.sndCounts)): self.sndCounts[i] = 0
+        self.rcvCounts = (C.c_long * self.numRanks)()
 
     def finalize(self):
         if mpi.MPI_Finalize() == mpi.MPI_SUCCESS:
@@ -61,7 +67,7 @@ class MPI(object):
         raise SimianError("Could not get rank in MPI")
 
     def size(self):
-        size = (C.c_int * 1)()
+        #size = (C.c_int * 1)()
         if mpi.MPI_Comm_size(self.comm, C.byref(self.itemp)) == mpi.MPI_SUCCESS:
             return self.itemp.value
         raise SimianError("Could not get size in MPI")
@@ -126,4 +132,21 @@ class MPI(object):
 
     def barrier(self):
         if (mpi.MPI_Barrier(self.comm) != mpi.MPI_SUCCESS):
-            SimianError("Could not Barrier in MPI")
+            raise SimianError("Could not Barrier in MPI")
+
+    def alltoallSum(self):
+        if (mpi.MPI_Alltoall(self.sndCounts, 1, self.LONG,
+                             self.rcvCounts, 1, self.LONG, self.comm) != mpi.MPI_SUCCESS):
+            raise SimianError("Could not AllToAll in MPI")
+        toRcv = 0
+        for i in range(self.numRanks):
+            toRcv = toRcv + self.rcvCounts[i]
+            self.sndCounts[i] = 0
+        return toRcv
+
+    def sendAndCount(self, x, dst, tag=None): #Blocking
+        m = Pack(x)
+        tag = tag or len(m) #Set to message length if None
+        if mpi.MPI_Send(m, len(m), self.BYTE, dst, tag, self.comm) != mpi.MPI_SUCCESS:
+            raise SimianError("Could not Send in MPI")
+        self.sndCounts[dst] += 1

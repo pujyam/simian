@@ -44,6 +44,7 @@ def loadMPI(mpichLib):
     mpi.MPI_Datatype = C.c_int
     mpi.MPI_BYTE = mpi.MPI_Datatype(0x4c00010d)
     mpi.MPI_DOUBLE = mpi.MPI_Datatype(0x4c00080b)
+    mpi.MPI_LONG = mpi.MPI_Datatype(0x4c000807)
 
     mpi.MPI_Op = C.c_int
     mpi.MPI_MIN = mpi.MPI_Op(0x58000002)
@@ -63,6 +64,7 @@ def loadMPI(mpichLib):
     mpi.MPI_Get_elements.restype = C.c_int
     mpi.MPI_Allreduce.restype = C.c_int
     mpi.MPI_Barrier.restype = C.c_int
+    mpi.MPI_Alltoall.restype = C.c_int
 
     mpi.MPI_Init.argtypes = [C.POINTER(C.c_int), C.POINTER(C.c_char_p)]
     mpi.MPI_Finalize.argtypes = []
@@ -77,5 +79,6 @@ def loadMPI(mpichLib):
     mpi.MPI_Get_elements.argtypes = [C.POINTER(mpi.MPI_Status), mpi.MPI_Datatype, C.POINTER(C.c_int)]
     mpi.MPI_Allreduce.argtypes = [C.c_void_p, C.c_void_p, C.c_int, mpi.MPI_Datatype, mpi.MPI_Op, mpi.MPI_Comm]
     mpi.MPI_Barrier.argtypes = [mpi.MPI_Comm]
+    mpi.MPI_Alltoall.argtypes = [C.c_void_p, C.c_int, mpi.MPI_Datatype, C.c_void_p, C.c_int, mpi.MPI_Datatype, mpi.MPI_Comm]
 
     return mpi
