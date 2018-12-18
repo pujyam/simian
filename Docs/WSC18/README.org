@@ -144,3 +144,8 @@ I only did 10/10 for number of runs so it didnt take all day, If you run it 100/
 | C code                  |             0.986 |             1.759 |                 0.8334 |
 
 
+
+* Maths
+There are two directories for each of the type of prng. 
+Since these results were expected. I will not go into details unless requested.
+We can check the files in ~lcg~ and in ~twist~ 
