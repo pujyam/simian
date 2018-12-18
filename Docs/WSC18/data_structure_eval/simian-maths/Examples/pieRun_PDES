@@ -1,0 +1,2 @@
+#Usage: python pdes_lanl_benchmarkV8_CTypes_optimistic.py n_ent s_ent q_avg p_receive p_send invert m_ent p_list ops_ent ops_sigma cache_friendliness init_seed time_bins endTime minDelay useMPI logName
+./pieRun pdes_lanl_benchmarkV8_CTypes_optimistic.py 50 1000 1 .8 .5 0 10 0 10 1 1 1 10 compute 1 True t.log 1

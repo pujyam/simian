@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+/Users/channon/macports/bin/mpirun-mpich-mp -np 3 /Users/channon/macports/bin/python2.7 -m cProfile -s cumulative $@

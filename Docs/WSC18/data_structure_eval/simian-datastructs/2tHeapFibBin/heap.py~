@@ -1,0 +1,142 @@
+import heapq
+import fibonacci_heap_mod
+
+# each LP has a Binary Heap (heapq) and each
+#  Rank (Simian Engine) has a heap of each LP
+
+tierDict = {}
+infTime = 0
+
+'''
+A fibonocci heap as tier 1 
+Each Tier 2 is a Binary Heap
+
+    o --- x         
+   / \   x x    
+  o   o ----- x     
+  |  / \     x x     
+  | o   o
+  x  \    \     
+ x x  x    x
+     x x  x x
+
+'''
+
+class tier2():
+    def __init__(self,key,lst):
+        self.key = key
+        self.arr = lst
+        
+    def push(self, item):
+        heapq.heappush(self.arr, item)
+        self.key = self.arr[0][0]
+        
+    def pop(self):
+        e = heapq.heappop(self.arr)
+        if len(self.arr):
+            self.key = self.arr[0][0] # update key
+        else:
+            self.key = infTime
+        return e
+    
+    def peak(self):
+        if len(self.arr):
+            return self.arr[0]
+        else:
+            return False
+
+    def size(self):
+        return len(self.arr)
+
+    def annihilate(self, event):
+        ret = False
+        otherEvents = []
+        if event["antimessage"]:
+            event["antimessage"] = False
+        else:
+            event["antimessage"] = True
+        while len(self.arr) and self.arr[0][0] <= event["time"] :
+            poppedEvent = heapq.heappop(self.arr)
+            if poppedEvent[1] == event:
+                ret = True
+                break
+            else:
+                otherEvents.append(poppedEvent)
+        if ret == False:
+            if event["antimessage"]:
+                event["antimessage"] = False
+            else:
+                event["antimessage"] = True
+        for x in otherEvents:
+            heapq.heappush(self.arr, x)
+        return ret
+    
+    def isEvent(self):
+        return len(self.arr)
+
+    def __cmp__(self, o):
+        return cmp(self.key, o.key)
+        
+def init(engine):
+    tier1 = fibonacci_heap_mod.Fibonacci_heap()
+    global infTime
+    infTime = int(engine.infTime) + 1
+    #for e in engine.entities:
+    #    for x in engine.entities[e]:
+    #        newTier = tier2(infTime,[])
+    #        tierDict[(e,x)]= tier1.enqueue(newTier,newTier.key)
+    return tier1
+
+def peak(arr):
+    return arr.min().m_elem.peak()
+
+def push(arr, element):
+    try:
+        t = tierDict[(element[1]['rx'],element[1]['rxId'])] # time,q
+    #print('%s %s' % (t.m_priority, t.m_elem.key))
+    #print t.m_elem.arr
+    #assert(t.m_priority == t.m_elem.key)
+    
+    #assert(t.m_priority == t.m_elem.key)
+    except KeyError:
+        newTier = tier2(infTime,[])
+        tierDict[(e,x)]= arr.enqueue(newTier,newTier.key)
+        t = tierDict[(element[1]['rx'],element[1]['rxId'])] # time,q
+        
+    if t.m_priority > element[0]: # fib heap needs to call decrease key
+        newKey = element[0]
+        t.m_elem.push(element)
+        arr.decrease_key(t,newKey)
+    else:  # existing key is smallest value
+        t.m_elem.push(element)
+    
+def pop(arr):
+    tier = arr.dequeue_min().m_elem
+    e = tier.pop()
+    # add tier back to fib heap
+    t = arr.enqueue(tier,tier.key)
+    tierDict[(e[1]['rx'],e[1]['rxId'])] = t
+    #assert(t.m_priority==tier.key)
+    return e
+
+def annihilate(arr, event):
+    #if 1: return
+    entry =  tierDict[(event['rx'],event['rxId'])]
+    arr.decrease_key(entry, float("-1"))
+    t = arr.dequeue_min() # delete(tierDict[(event['rx'],event['rxId'])]) # time,q
+    #print t
+    ret = t.m_elem.annihilate(event)
+    tierDict[(event['rx'],event['rxId'])] = arr.enqueue(t.m_elem,t.m_elem.key)
+    return ret
+
+def isEvent(arr):
+    try:
+        return arr.min().m_elem.isEvent()
+    except IndexError:
+        return False
+    
+def size(arr):
+    numEvents = 0
+    for heap in arr:
+        numEvents += heap.size()
+    return numEvents

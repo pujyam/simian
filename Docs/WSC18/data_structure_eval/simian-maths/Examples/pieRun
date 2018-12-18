@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+/Users/channon/macports/bin/mpirun-mpich-mp -np 2 /Users/channon/macports/bin/python2.7 $@
