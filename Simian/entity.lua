@@ -114,7 +114,7 @@ local function Entity(name, base)
                 --(which is the factory for the co-routine - as "this" in examples)
                 --Through this argument all the members of the process table below become
                 --accessible to all the process-instance co-routine functions.
-                proc:wake(proc, ...)
+                return proc:wake(proc, ...)
             else
                 error("Starting an already started process: " .. proc.name)
             end
@@ -124,7 +124,7 @@ local function Entity(name, base)
     c._wakeProcess = function(thisEntity, name) --Hidden, implicit wake a named process without arguments
         local proc = thisEntity._procList[name]
         if proc then --If existing and not been killed asynchronously
-            proc:wake()
+            return proc:wake()
         end
     end
 
@@ -133,7 +133,7 @@ local function Entity(name, base)
         if not proc then
             error("Attempted to wake a non existant process: " .. name)
         else
-            proc:wake(...)
+            return proc:wake(...)
         end
     end
 
