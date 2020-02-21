@@ -102,14 +102,14 @@ class Entity(object):
     def _wakeProcess(self, name, tx=None, txId=None): #Hidden: implicit wake a named process without arguments
         if name in self._procList:
             proc = self._procList[name]
-            proc.wake()
+            return proc.wake()
 
     def wakeProcess(self, name, *args): #Wake a named process with arguments
         if not (name in self._procList):
             raise SimianError("Attempted to wake a non existant process: " + name)
         else: #If existing and not been killed asynchronously
             proc = self._procList[name]
-            proc.wake(*args)
+            return proc.wake(*args)
 
     def killProcess(self, name): #Kills named process or all entity-processes
         if name: #Kills named child-process
