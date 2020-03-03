@@ -11,6 +11,8 @@
 
 #Author: Nandakishore Santhi
 #Date: 23 November, 2014
+#Author: Christopher Hannon
+#Date: 5 October, 2018
 #Copyright: Open source, must acknowledge original author
 #Purpose: PDES Engine in Python, mirroring a subset of the Simian JIT-PDES
 #  Named entity class with inheritence and processes
@@ -32,6 +34,16 @@ class Entity(object):
         self._procList = {} #A separate process table for each instance
         self._category = {} #A map of sets for each kind of process
 
+        # for optimistic
+        self.VT = 0
+        self.processedEvents = []
+        self.savedStates = []
+        self.sendEvents = []
+        self.randoms = {}
+        self.recoveredRandoms = {}
+        # for debugging
+        self.allrand = [0]
+        
     def __str__(self):
         return self.name + "(" + str(self.num) + ")"
 
@@ -46,12 +58,36 @@ class Entity(object):
                 + " attempted to send with too little delay")
 
         time = engine.now + offset
+        if engine.optimistic:
+            if offset == 0:
+                offset = 0.000000001 # event needs to be STRICTLY not the same time
+            time = self.VT + offset
+                
         if time > engine.endTime: #No need to send this event
             return
+
+        if engine.optimisticColor == 'white':
+            color = 'white'
+        else:
+            color = 'red'
 
         if rx == None: rx = self.name
         if rxId == None: rxId = self.num
         e = {
+            "tx": self.name, #String
+            "txId": self.num, #Number
+            "rx": rx, #String
+            "rxId": rxId, #Number
+            "name": eventName, #String
+            "data": data, #Object
+            "time": time, #Number
+            "antimessage": False,
+            "GVT": False,
+            "color": color,
+            }
+
+        if engine.optimistic:
+            ae = {
                 "tx": self.name, #String
                 "txId": self.num, #Number
                 "rx": rx, #String
@@ -59,17 +95,30 @@ class Entity(object):
                 "name": eventName, #String
                 "data": data, #Object
                 "time": time, #Number
+                "antimessage" : True,
+                "GVT" : False,
+                "color" : color,
             }
-
-        recvRank = engine.getOffsetRank(rx, rxId)
+            self.sentEvents.append(ae)
+                                    
+        
+        if engine.partfct:
+            recvRank = engine.partfct(rx,rxId, engine.size, engine.partarg)
+        else:
+            recvRank = engine.getOffsetRank(rx, rxId)
 
         if recvRank == engine.rank: #Send to self
             heapq.heappush(engine.eventQueue, (time, e))
         else:
-            if time < engine.minSent: engine.minSent = time
-            #engine.MPI.isend(e, recvRank) #Send to others (Problem with MPI buffers getting filled too fast)
-            engine.MPI.send(e, recvRank) #Send to others
-
+            if engine.optimistic:
+                if engine.optimisticColor == 'white':
+                    engine.optimisticWhite += 1 # GVT approx algo
+                else:
+                    engine.optimistic_t_min = min(engine.optimistic_t_min, time)
+                engine.MPI.send(e, recvRank)
+            else:
+                engine.MPI.sendAndCount(e, recvRank)
+                
     def attachService(self, name, fun):
         #Attaches a service at runtime to instance
         setattr(self, name, types.MethodType(fun, self))
@@ -187,3 +236,68 @@ class Entity(object):
             nameSet[n] = k
             n = n + 1
         return nameSet
+
+    def saveAntimessages(self,state):
+        state['antimessages'] = list(self.sentEvents)
+        self.sentEvents = []
+        return dict(state)
+
+    def recoverAntimessages(self, state, time):
+        engine = self.engine
+        if state['antimessages']:
+            events = state['antimessages']
+            #print events
+            for event in events:
+                if engine.partfct:
+                    recvRank = engine.partfct(event["rx"], event["rxId"], engine.size, engine.partarg)
+                else:
+                    recvRank = engine.getOffsetRank(event["rx"], event["rxId"])
+                if recvRank == engine.rank: #Send to self
+                    heapq.heappush(engine.eventQueue, (event["time"], event))
+                else:
+                    engine.MPI.send(event, recvRank)
+                    engine.optimisticNumAntimessagesSent += 1
+        else:
+            return
+            
+
+    def saveRandomState(self,state):
+        state['randoms'] = dict(self.randoms) # add random numbers
+        self.randoms={} # reset randoms for next time
+        return dict(state)
+    
+    def recoverRandoms(self, state):
+        if state['randoms']:
+            randoms = dict(state['randoms'])
+            for m in randoms:
+                if m in self.recoveredRandoms:
+                    tmp = self.recoveredRandoms[m]
+                    tmp += reversed(randoms[m])
+                    self.recoveredRandoms[m] = tmp
+                else:
+                    self.recoveredRandoms[m] = randoms[m]
+        else:
+            return
+
+    def random(self, method, *params):
+        # this function seems like it works
+        # retrieve random number or generate new one
+        if method.__name__ in self.recoveredRandoms:
+            # get last random
+            r = self.recoveredRandoms[method.__name__]
+            result = r.pop(-1)
+            if r:
+                self.recoveredRandoms[method.__name__] = r
+            else: # no more events
+                self.recoveredRandoms.pop(method.__name__)
+        else: # no random history
+            result = method(*params)
+        # add to state for rollbacks
+        if method.__name__ in self.randoms:
+            tmp = self.randoms[method.__name__]
+            tmp.append(result)
+            self.randoms[method.__name__] = tmp
+        else:
+            self.randoms[method.__name__] = [result]
+        return result
+            

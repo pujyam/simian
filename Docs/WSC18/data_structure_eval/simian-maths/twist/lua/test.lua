@@ -1,0 +1,21 @@
+require('randomlua')
+
+
+local sum = 0
+
+
+l1 = lcg(0) -- Linear congruential generator (Ansi C params)
+l2 = lcg(0, 'nr') --Linear congruential generator (Numerical recipes params)
+l3 = lcg(0, 'mvc') -- Linear congruential generator (Microsoft Visual C params)
+c1 = mwc(0) -- Multiply-with-carry (Ansi C params)
+c2 = mwc(0, 'nr') -- Multiply-with-carry (Numerical recipes params)
+c3 = mwc(0, 'mvc') -- Multiply-with-carry (Microsoft Visual C params)
+m = twister(0) -- Mersenne twister
+
+--m = twister(0)
+
+
+
+for i=1, 1000000 do
+   sum = sum + l2:random()
+end

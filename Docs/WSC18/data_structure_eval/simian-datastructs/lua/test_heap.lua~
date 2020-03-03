@@ -1,0 +1,39 @@
+jit.opt.start(3, 'hotloop=3', 'hotexit=8', 'instunroll=10', 'loopunroll=10', 'callunroll=10', 'recun
+roll=10', 'tryside=30') --Optional JIT optimization flags: user adjustable           
+
+local eventQ = require "eventQ"
+
+local eventQueue = {}
+
+eventQ.push(eventQueue, event)
+
+event = eventQ.pop(eventQueue)
+
+
+
+
+-- test 1
+
+for x=1,1000000 do
+   local event = {
+      tx = 'a',
+      rx = 'b',
+      txID = 1,
+      rxID = 1,
+      name = "bob",
+      data = "none",
+      time = x,
+   }
+   eventQ.push(eventQueue,event)
+end
+
+for y=1,1000000 do
+   event = eventQ.pop(eventQueue)
+-- test 2
+
+
+
+-- test 3
+
+
+
