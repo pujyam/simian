@@ -1,0 +1,12 @@
+##############################################################################
+# Author: Nandakishore Santhi
+# Date: 23 November, 2014
+# Copyright: Open source, must acknowledge original author
+# Purpose: PDES Engine in CPython and PyPy, mirroring most of the original LuaJIT version of Simian JIT-PDES
+# NOTE: If speed rivaling C/C++ PDES engines is desired, consider adopting the LuaJIT version of Simian JIT-PDES
+#
+##############################################################################
+
+Simian JIT-PDES for both Python 2.7+ and 3.7+.
+Examples are in the Examples sub-directory.
+License information in file headers and in file LICENSE
