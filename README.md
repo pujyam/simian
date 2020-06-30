@@ -2,14 +2,35 @@
 
 =================================================================================
 
-### Simian Process Oriented Conservative Parallel Discrete Event Simulator from LANL
+### Simian Just In Time Compiled Process Oriented Conservative Parallel Discrete Event Simulator from LANL
 =================================================================================
 
 Nandakishore Santhi (nsanthi at lanl dot gov)
 
-Simian contains the Lua implementation and it needs luajit-2.1. SimianPie contains the Python implementation, which needs Python 2.7.x with greenlets (optional) or Pypy 2.4.x. MPICH 3.1.4 or OpenMPI 1.6.x are optionally needed if using MPI.
+Simian is a JIT compiled Process and Event Oriented Parallel Discrete Event Simulator with implementations in Lua(jit), Python(PyPy) and Javascript.
+Simian rivals other leading PDES engines written in compiled languages in terms of bothe event-rate speeds as well as the strength of its simple, yet powerful features.
 
-See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. Example.Py has examples of SimianPie usage.
+SimianLua contains the Lua implementation and it needs luajit-2.1.
+SimianPie contains the Python implementation, which needs Python 2.7.x with greenlets (optional) or Pypy 2.4.x. MPICH 3.1.4 or OpenMPI 1.6.x are optionally needed if using MPI.
+SimianJS contains the Javascript implementation.
+
+In general the execution speeds are in the following order for various language implementations (Fastest to Slowest):
+
+    SimianLua with Luajit-2.1
+    SimianJS with included modified MasalaChai interpreter
+    Other leading PDES simulators in C++ or C
+    SimianLua with Lua-5.1
+    SimianPie with PyPy-2.x
+    SimianPie with CPython-3.x
+    SimianPie with PyPy-3.x
+    SimianPie with CPython-2.x
+    ...
+
+See Docs for API documentation (Somewhat dated, but still useable. Will be updated soon!).
+SimianLua/Examples has examples of Simian (Lua) usage.
+SimianPie/Examples has examples of SimianPie usage.
+SimianJS/Examples has examples of SimianPie usage.
+Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar.
 
 ## If not using MPI:
     Set useMPI flag to false when initializing the Simian PDES Engine
@@ -30,11 +51,11 @@ See Docs for API documentation. Example.Lua has examples of Simian (Lua) usage. 
         Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory or pass absolute path to the library to Simian() when creating the engine.
 
 ## Test with pHold app without MPI:
-    luajit Examples.Lua/phold-noop-noMPI.lua
+    cd SimianLua; luajit Examples/phold-noop-noMPI.lua
 
 ## Testing with MPI on LANL PDES benchmark app:
     (on a medium sized cluster with more than 1000 cores)
-    mpirun -np 1000 luajit-2.1.0-alpha Examples.Lua/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
+    cd SimianLua; mpirun -np 1000 luajit-2.1.0-alpha Examples/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
 
 ## LANL internal reference:
 CODE Title: Simian, version 1.5 (OSS)
