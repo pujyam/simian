@@ -8,6 +8,7 @@
 Nandakishore Santhi (nsanthi at lanl dot gov)
 
 Simian is a JIT compiled Process and Event Oriented Parallel Discrete Event Simulator with implementations in Lua(jit), Python(PyPy) and Javascript.
+Simian has both a conservative (default) and an optimistic (experimental, old version was released in public repo https://github.com/annonch/simian. A newer optimistic mode is currently under development) execution mode.
 Simian rivals other leading PDES engines written in compiled languages in terms of bothe event-rate speeds as well as the strength of its simple, yet powerful features.
 
 SimianLua contains the Lua implementation and it needs luajit-2.1.
