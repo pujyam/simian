@@ -59,7 +59,7 @@ Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar
     cd SimianLua; mpirun -np 1000 luajit-2.1.0-alpha Examples/pdes_lanl_benchmarkV8.lua 1000 100 1 0 0 false 1 0 100000 0 0.5 1 10 1000 1 true LANL_PDES.log
 
 ## LANL internal reference:
-CODE Title: Simian, version 1.5 (OSS)
+CODE Title: Simian, version 1.65 (OSS)
 
 LACC #:  LA-CC-15-015
 
