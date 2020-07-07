@@ -28,9 +28,9 @@ In general the execution speeds are in the following order for various language 
     ...
 
 See Docs for API documentation (Somewhat dated, but still useable. Will be updated soon!).
-SimianLua/Examples has examples of Simian (Lua) usage.
+SimianLua/Examples has examples of SimianLua usage.
 SimianPie/Examples has examples of SimianPie usage.
-SimianJS/Examples has examples of SimianPie usage.
+SimianJS/Examples has examples of SimianJS usage.
 Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar.
 
 ## If not using MPI:
