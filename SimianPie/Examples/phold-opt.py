@@ -51,35 +51,35 @@ count = 64
 lookahead = minDelay
 
 def exponential(mean):
-	return -math.log(random.random())/mean
+    return -math.log(random.random())/mean
 
 class Node(simianEngine.Entity):
-	def __init__(self, baseInfo, *args):
-		super(Node, self).__init__(baseInfo)
-		self.targetId = 0
-		self.offset = 0
+    def __init__(self, baseInfo, *args):
+        super(Node, self).__init__(baseInfo)
+        self.targetId = 0
+        self.offset = 0
 
-	def generate(self, *args):
-		self.targetId = random.randrange(count)
-		#self.offset = exponential(1) + lookahead
-		self.offset = lookahead
+    def generate(self, *args):
+        self.targetId = random.randrange(count)
+        #self.offset = exponential(1) + lookahead
+        self.offset = lookahead
 
-		self.reqService(self.offset, "generate", None, "Node", self.targetId)
+        self.reqService(self.offset, "generate", None, "Node", self.targetId)
 
-	def saveState(self):
-		state = {"targetId" : self.targetId, "offset" : self.offset}
-		return dict(state)
+    def saveState(self):
+        state = {"targetId" : self.targetId, "offset" : self.offset}
+        return dict(state)
 
-	def recoverState(self,state):
-		self.targetId = state["targetId"]
-		self.offset = state["offset"]
-		return
-
-for i in range(count):
-	simianEngine.addEntity("Node", Node, i)
+    def recoverState(self,state):
+        self.targetId = state["targetId"]
+        self.offset = state["offset"]
+        return
 
 for i in range(count):
-	simianEngine.schedService(0, "generate", None, "Node", i)
+    simianEngine.addEntity("Node", Node, i)
+
+for i in range(count):
+    simianEngine.schedService(0, "generate", None, "Node", i)
 
 simianEngine.run()
 simianEngine.exit()
