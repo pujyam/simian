@@ -5,9 +5,9 @@ All rights reserved.
 Copyright 2015. Los Alamos National Security, LLC. This software was produced under U.S. Government contract DE-AC52-06NA25396 for Los Alamos National Laboratory (LANL), which is operated by Los Alamos National Security, LLC for the U.S. Department of Energy. The U.S. Government has rights to use, reproduce, and distribute this software.  NEITHER THE GOVERNMENT NOR LOS ALAMOS NATIONAL SECURITY, LLC MAKES ANY WARRANTY, EXPRESS OR IMPLIED, OR ASSUMES ANY LIABILITY FOR THE USE OF THIS SOFTWARE.  If software is modified to produce derivative works, such modified software should be clearly marked, so as not to confuse it with the version available from LANL.
 
 Additionally, redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-	Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 
-	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. 
-	Neither the name of Los Alamos National Security, LLC, Los Alamos National Laboratory, LANL, the U.S. Government, nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission. 
+    Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 
+    Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. 
+    Neither the name of Los Alamos National Security, LLC, Los Alamos National Laboratory, LANL, the U.S. Government, nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission. 
 THIS SOFTWARE IS PROVIDED BY LOS ALAMOS NATIONAL SECURITY, LLC AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL LOS ALAMOS NATIONAL SECURITY, LLC OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]
 
@@ -53,9 +53,21 @@ local function Entity(name, base)
                 .. " attempted to send with too little delay")
         end
 
+        local color = "white"
         local time = engine.now + offset
-        if time > engine.endTime then --No need to send this event
-            return
+
+        if engine.optimistic then
+            if offset == 0 then
+                offset = 0.000000001
+            end
+            
+            time = thisEntity.VT + offset
+            
+            if engine.color == "red" then
+                color = "red"
+            end
+        else
+            if time > engine.endTime then return end --No need to send this event
         end
 
         local rx = rx or thisEntity.name
@@ -68,14 +80,69 @@ local function Entity(name, base)
             name = eventName, --String
             data = data, --Object
             time = time, --Number
+
+            antimessage = false,
+            GVT = false,
+            color = color,
         }
+
+        if engine.optimistic then
+            local ae = {
+                tx = thisEntity.name, --String
+                txId = thisEntity.num, --Number
+                rx = rx, --String
+                rxId = rxId, --Number
+                name = eventName, --String
+                data = data, --Object
+                time = time, --Number
+
+                antimessage = true,
+                GVT = false,
+                color = color,
+            }
+            table.insert(thisEntity.sentEvents, ae)
+        end
 
         local recvRank = engine:getOffsetRank(rx, rxId)
 
         if recvRank == engine.rank then --Send to thisEntity
             eventQ.push(engine.eventQueue, e)
         else
-            engine.MPI:sendAndCount(e, recvRank) --Send to others
+            if engine.optimistic then
+                if engine.color == "white" then
+                    engine.whiteMsg = engine.whiteMsg + 1
+                else
+                    engine.t_min = math.min(engine.t_min, time)   
+                end
+                engine.MPI:send(e, recvRank) --Send to others
+            else
+                engine.MPI:sendAndCount(e, recvRank) --Send to others
+            end
+        end
+    end
+
+    c.saveAntimessages = function(thisEntity, state)
+        state.antimessages = thisEntity.sentEvents
+        thisEntity.sentEvents = {}
+        return state
+    end
+
+    c.recoverAntimessages = function(thisEntity, state, time)
+        local engine = thisEntity.engine --Get the engine for this entity
+        
+        if state.antimessages then
+            events = state.antimessages
+
+            for k,event in pairs(events) do 
+                local recvRank = engine:getOffsetRank(event.rx, event.rxId)
+
+                if recvRank == engine.rank then
+                    eventQ.push(engine.eventQueue, event)
+                else
+                    engine.MPI:send(event, recvRank) --Send to others
+                    engine.antimsgSent = engine.antimsgSent + 1
+                end
+            end
         end
     end
 
@@ -258,6 +325,11 @@ local function Entity(name, base)
                 num = num, --Serial Number
                 _procList = {}, --A separate process table for each instance
                 _category = {}, --A map of sets for each kind of process
+                    
+                -- For optimistic processing
+                VT = 0,
+                processedEvents = {},
+                sentEvents = {},
             }
             setmetatable(obj, c) --The table "c" will be the metatable for all entity instances
 
