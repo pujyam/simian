@@ -373,7 +373,7 @@ do
         local header = string.format("%10s %10s %10s %10s %10s %10s    %q\n", "#EntityID", "#Sends", "#Receives", "Ops(Min", "Avg", "Max)", "Time Bin Sends")
         -- Write out Stats, only invoked on entity 0
         if self.stats_received == 0 then -- Only write header line a single time
-            self.out:write(header)
+            --self.out:write(header)
         end
 
         self.stats_received = self.stats_received + 1
@@ -388,15 +388,15 @@ do
         end
 
         local str_out = string.format("%10d %10d %10d %10d %10.5g %10d    %s\n", msg[1], msg[2], msg[3], msg[4], msg[5], msg[6], "[" .. table.concat(msg[7], ", ") .. "]")
-        self.out:write(str_out)
+        --self.out:write(str_out)
 
         if self.stats_received == n_ent then -- We can write out global stats
-            self.out:write("===================== LANL PDES BENCHMARK  Collected Stats from All Ranks =======================\n")
+            --self.out:write("===================== LANL PDES BENCHMARK  Collected Stats from All Ranks =======================\n")
             header = string.format("%10s %10s %10s %10s %10s %10s %10s    %q\n", "#Entities", "#Sends", "#Receives", "OpsCount", "Ops(Min", "Avg", "Max)", "Time Bin Sends")
-            self.out:write(header)
+            --self.out:write(header)
             str_out = string.format("%10d %10d %10d %10d %10d %10.5g %10d    %s\n", n_ent, self.gsend_count, self.greceive_count, self.gopsCount, self.gops_min, self.gops_mean, self.gops_max, "[" .. table.concat(self.gtime_sends, ", ") .. "]")
-            self.out:write(str_out)
-            self.out:write("=================================================================================================\n")
+            --self.out:write(str_out)
+            --self.out:write("=================================================================================================\n")
         end
     end
 end

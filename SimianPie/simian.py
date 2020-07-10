@@ -56,7 +56,7 @@
 
 __SimianVersion__ = "1.65"
 
-import os, sys
+import os, sys, math
 import hashlib, heapq
 import time as timeLib
 import types #Used to bind Service at runtime to specific instances
@@ -342,9 +342,6 @@ class Entity(object):
                 else:
                     engine.MPI.send(event, recvRank)
                     engine.antimsgSent += 1
-        else:
-            return
-
 
     def attachService(self, name, fun):
         #Attaches a service at runtime to instance
@@ -1638,9 +1635,9 @@ class Simian(object):
 
         # For GVT interval
         self.gvtThreshold = 50
-        self.gvtMemReq = 100
+        self.gvtMemReq = 50
         self.gvtCounter = 0
-        self.gvtInterval = 1000
+        self.gvtInterval = 500
         self.gvtCompute = 0
 
         #One output file per rank
@@ -1771,7 +1768,11 @@ class Simian(object):
                 print ("    NUMBER OF ANTIMESSAGES SENT %s " % (antiEvents))
                 print ("    COMMITTED EVENTS: %s " % (totalEvents - rollEvents))
                 print ("    COMMITTED EVENT RATE: %s" % ((totalEvents - rollEvents)/elapsedTime))
+                print ("    Efficiency: " + str(math.floor((totalEvents - rollEvents) * 100 / totalEvents)) + "%")
                 print ("    # GVT computations: %s" % self.gvtCompute)
+                print ("        GVT Interval: " + str(self.gvtInterval))
+                print ("        GVT Threshold: " + str(self.gvtThreshold))
+                print ("        GVT MemReq: " + str(self.gvtMemReq))
                 self.out.write(str((totalEvents - rollEvents)/elapsedTime) + "\n")
             else:
                 print("EVENT RATE: " + str(totalEvents/elapsedTime))
@@ -1798,35 +1799,36 @@ class Simian(object):
         if self.cancelEvents(event): # TODO: see if heuristic improves perfomance
             #print(str(self.rank) + " cancel and ret")
             return
-        elif time > self.gvt + 5 * self.gvtThreshold:
+        
+        if time > self.gvt + 5 * self.gvtThreshold:
             #print(str(self.rank) + " ret, " + str(time))
             self.ec += 1
             heapq.heappush(self.eventQueue, (time, self.ec, event))
             return
-        else: # no inverse message in queue
-            if event["antimessage"]: #rollback
-                #print(str(self.rank) + " rollback")
-                #self.ec += 1
-                #heapq.heappush(self.eventQueue, (time, self.ec, event))
-                self.rollback(time, LP)
-            else:  # normal message
-                if LP.VT > time: # causality violated
-                    #print(str(self.rank) + " causality violation")
-                    self.ec += 1
-                    heapq.heappush(self.eventQueue, (time, self.ec, event))
-                    self.rollback(time,LP)
+        
+        if event["antimessage"]: #rollback
+            #print(str(self.rank) + " rollback")
+            #self.ec += 1
+            #heapq.heappush(self.eventQueue, (time, self.ec, event))
+            self.rollback(time, LP)
+        else:  # normal message
+            if LP.VT > time: # causality violated
+               #print(str(self.rank) + " causality violation")
+               self.ec += 1
+               heapq.heappush(self.eventQueue, (time, self.ec, event))
+               self.rollback(time,LP)
 
-                else: # execute event
-                    #print(str(self.rank) + " exe")
-                    state = LP.saveState() # targetId, offset
-                    LP.VT = time
+            else: # execute event
+                #print(str(self.rank) + " exe")
+                state = LP.saveState() # targetId, offset
+                LP.VT = time
 
-                    service = getattr(LP, event["name"])
-                    service(event["data"], event["tx"], event["txId"])
-                    self.optNumEvents += 1
+                service = getattr(LP, event["name"])
+                service(event["data"], event["tx"], event["txId"])
+                self.optNumEvents += 1
 
-                    LP.processedEvents.append((event,dict(LP.saveAntimessages(state))))
-                    # save event and its state which includes its antimessages
+                LP.processedEvents.append((event,dict(LP.saveAntimessages(state))))
+                # save event and its state which includes its antimessages
                         
     def cancelEvents(self, event):
         ret = False

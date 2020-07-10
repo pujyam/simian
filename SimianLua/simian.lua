@@ -73,21 +73,22 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI, opt)
 
     self.optimistic = opt or false
 
-    self.optimisticNumEvents = 0
-    self.optimisticNumEventsRolledBack = 0
-    self.optimisticNumAntimessagesSent = 0
+    self.gvt = 0
+    self.optNumEvents = 0
+    self.rollbacks = 0
+    self.antimsgSent = 0
 
-    self.optimisticGVT = 0
-    self.optimisticGVTMemReq = 50 -- To kickoff GVT computation. In terms of num elemens (float each)
-    self.optimisticGVTThreshold = gvt_thres or 50 -- For not scheduling a msg to much in to the future
+    self.color = "white"
+    self.countRound = 0
+    self.t_min = self.infTime -- Mimimum red msg time stamp
+    self.whiteMsg = 0 -- Count white messages (msgs sent when sender is white)
+
+    self.gvtThreshold = 50 -- For not scheduling a msg to much in to the future
+    self.gvtMemReq = 50 -- To kickoff GVT computation. In terms of num elemens (float each)
     self.gvtCounter = 0
     self.gvtInterval = 500
     self.gvtCompute = 0
 
-    self.optimisticColor = "white"
-    self.optimisticWhite = 0 -- Count white messages (msgs sent when sender is white)
-    self.optimistic_t_min = self.infTime -- Mimimum red msg time stamp
-    self.optimisticCountRound = 0
 
     if self.optimistic then
         if not self.useMPI or self.size == 1 then
@@ -140,27 +141,27 @@ function Simian.run(self) --Run the simulation
     self.running = true
 
     if self.optimistic then
-        self.optimisticGVT = startTime
+        self.gvt = startTime
 
-        while self.optimisticGVT < endTime do
+        while self.gvt < endTime do
             while MPI:iprobe() do
                 local remoteEvent = MPI:recvAnySize()
 
-                if remoteEvent.GVT then self:optimisticCalcGVT(remoteEvent)
+                if remoteEvent.GVT then self:calcGVT(remoteEvent)
                 else
                     if (not remoteEvent.antimessage) and (remoteEvent.color == "white") then
-                        self.optimisticWhite = self.optimisticWhite - 1
+                        self.whiteMsg = self.whiteMsg - 1
                     end
 
                     eventQ.push(eventQueue, remoteEvent)
                 end
             end
 
-            if #eventQueue > 0 then self:optimisticProcessNextEvent() end
+            if #eventQueue > 0 then self:processNextEvent() end
 
-            if self.rank == 0 and self.optimisticColor == "white" then
+            if self.rank == 0 and self.color == "white" then
                 if self.gvtCounter >= self.gvtInterval then 
-                    self:optimisticKickoffGVT()
+                    self:kickoffGVT()
                     self.gvtCounter = 0
                 else self.gvtCounter = self.gvtCounter + 1 end
             end
@@ -208,9 +209,9 @@ function Simian.run(self) --Run the simulation
 
     if self.optimistic then
         MPI:barrier()
-        totalEvents = MPI:allreduce(self.optimisticNumEvents, MPI.SUM)
-        rollEvents = MPI:allreduce(self.optimisticNumEventsRolledBack, MPI.SUM)
-        antiEvents = MPI:allreduce(self.optimisticNumAntimessagesSent, MPI.SUM)
+        totalEvents = MPI:allreduce(self.optNumEvents, MPI.SUM)
+        rollEvents = MPI:allreduce(self.rollbacks, MPI.SUM)
+        antiEvents = MPI:allreduce(self.antimsgSent, MPI.SUM)
         totalNWEvents = MPI:allreduce(nwEvents, MPI.SUM)
         nwEvents = nwEvents + 3
     else
@@ -227,16 +228,20 @@ function Simian.run(self) --Run the simulation
     if rank == 0 then
         print("SIMULATION COMPLETED IN: " .. elapsedClock .. " SECONDS")
         print("SIMULATED EVENTS: " .. totalEvents)
-        print("NETWORK EVENTS: " .. totalNWEvents)
         
         if self.optimistic then
             print ("    NUMBER OF EVENTS ROLLED BACK: " .. rollEvents)
             print ("    NUMBER OF ANTIMESSAGES SENT: " .. antiEvents)
             print ("    COMMITTED EVENTS: " .. (totalEvents - rollEvents))
             print ("    COMMITTED EVENT RATE: " .. ((totalEvents - rollEvents)/elapsedClock))
+            print ("    Efficiency: " .. math.floor((totalEvents - rollEvents) * 100 / totalEvents) .. "%")
             print ("    # GVT Computations: " .. self.gvtCompute)
+            print ("        GVT Interval: " .. self.gvtInterval)
+            print ("        GVT Threshold: " .. self.gvtThreshold)
+            print ("        GVT MemReq: " .. self.gvtMemReq)
             self.out:write((totalEvents - rollEvents)/elapsedClock .. "\n")
         else
+            print("NETWORK EVENTS: " .. totalNWEvents)
             print("EVENT RATE: " .. totalEvents/elapsedClock)
             self.out:write(totalEvents/elapsedClock .. "\n")
         end
@@ -244,9 +249,9 @@ function Simian.run(self) --Run the simulation
     end
 end
 
-function Simian.optimisticKickoffGVT(self)
-    self.optimisticCountRound = 0
-    self.optimisticColor = "red" 
+function Simian.kickoffGVT(self)
+    self.countRound = 0
+    self.color = "red" 
     local LPVT = self.infTime
 
     for k,entType in pairs(self.entities) do
@@ -262,7 +267,7 @@ function Simian.optimisticKickoffGVT(self)
     local e = {
                 m_clock = LPVT, 
                 m_send = self.infTime,
-                count = self.optimisticWhite,
+                count = self.whiteMsg,
                 GVT = true,
                 GVT_broadcast = -1,
                 rank = self.rank,
@@ -270,19 +275,19 @@ function Simian.optimisticKickoffGVT(self)
     
     --print(self.rank, e.m_clock, e.count)
     self.MPI:send(e, 1) -- Send to Rank 1 
-    self.optimisticWhite = 0    
+    self.whiteMsg = 0    
 end
 
-function Simian.optimisticCalcGVT(self, event)
+function Simian.calcGVT(self, event)
     local LPVT = self.infTime
 
     if event.GVT_broadcast >= 0 then
-        self.optimisticGVT = event.GVT_broadcast
-        self.optimisticColor = "white"
-        self:optimisticFossilCollect(self.optimisticGVT)
-        self.optimistic_t_min = self.infTime
+        self.gvt = event.GVT_broadcast
+        self.color = "white"
+        self:fossilCollect(self.gvt)
+        self.t_min = self.infTime
 
-        --print(self.rank, " GVT Received, ", self.optimisticGVT)
+        --print(self.rank, " GVT Received, ", self.gvt)
         return
     else
         for k,entType in pairs(self.entities) do
@@ -297,43 +302,43 @@ function Simian.optimisticCalcGVT(self, event)
     end
 
     if self.rank == 0 then
-        event.count = event.count + self.optimisticWhite
+        event.count = event.count + self.whiteMsg
 
-        if event.count == 0 and self.optimisticCountRound > 0 then
-            local red_ts = math.min(event.m_send, self.optimistic_t_min)
+        if event.count == 0 and self.countRound > 0 then
+            local red_ts = math.min(event.m_send, self.t_min)
             local min_ts = math.min(LPVT, red_ts)
-            self.optimisticGVT = math.min(event.m_clock, min_ts)
+            self.gvt = math.min(event.m_clock, min_ts)
             
-            --print(self.rank, " GVT Found, ", self.optimisticGVT)
+            --print(self.rank, " GVT Found, ", self.gvt)
             for rank = self.size-1, 1, -1 do 
-                --print("0 Send to ", rank, " - ", self.optimisticGVT)
-                local e = {GVT = true, GVT_broadcast = self.optimisticGVT,} 
+                --print("0 Send to ", rank, " - ", self.gvt)
+                local e = {GVT = true, GVT_broadcast = self.gvt,} 
                 self.MPI:send(e, rank)
             end
 
             self.gvtCompute = self.gvtCompute + 1
-            self.optimisticWhite = 0
-            self.optimisticColor = "white"
-            self.optimistic_t_min = self.infTime
-            self:optimisticFossilCollect(self.optimisticGVT)
+            self.whiteMsg = 0
+            self.color = "white"
+            self.t_min = self.infTime
+            self:fossilCollect(self.gvt)
         else
             --print(self.rank, "GVT Not Found")
-            self.optimisticCountRound = self.optimisticCountRound + 1
+            self.countRound = self.countRound + 1
 
             event.m_clock = LPVT
-            event.m_send = math.min(event.m_send, self.optimistic_t_min)
+            event.m_send = math.min(event.m_send, self.t_min)
             --print(self.rank, self.size)
             local recvRank = (self.rank + 1) % self.size 
 
             --print(self.rank, event.m_clock, event.m_send, event.count, recvRank)
             self.MPI:send(event, recvRank)
-            self.optimisticWhite = 0
+            self.whiteMsg = 0
         end
     else
         --print(self.rank, "GVT Not Found")
-        if self.optimisticColor == "white" then
-            self.optimistic_t_min = self.infTime
-            self.optimisticColor = "red"
+        if self.color == "white" then
+            self.t_min = self.infTime
+            self.color = "red"
         end
 
         local recvRank = (self.rank + 1) % self.size
@@ -341,65 +346,66 @@ function Simian.optimisticCalcGVT(self, event)
         --print(event.m_clock, event.GVT)
         local e = {
                 m_clock = math.min(event.m_clock, LPVT),
-                m_send = math.min(event.m_send, self.optimistic_t_min),
-                count = (event.count + self.optimisticWhite),
+                m_send = math.min(event.m_send, self.t_min),
+                count = (event.count + self.whiteMsg),
                 GVT = true,
                 GVT_broadcast = -1,
             }
     
         --print(self.rank, e.m_clock, e.m_send, e.count)
         self.MPI:send(e, recvRank) 
-        self.optimisticWhite = 0    
+        self.whiteMsg = 0    
     end
 end
 
-function Simian.optimisticProcessNextEvent(self)
+function Simian.processNextEvent(self)
     local LP = self.entities[self.eventQueue[1].rx][self.eventQueue[1].rxId]
 
-    if self.rank == 0 and #(LP.processedEvents) > self.optimisticGVTMemReq and self.optimisticColor == "white" then
-        --print(self.rank, "kickoff GVT - event f, ", self.optimisticGVT)
-        self:optimisticKickoffGVT() 
+    if self.rank == 0 and #(LP.processedEvents) > self.gvtMemReq and self.color == "white" then
+        --print(self.rank, "kickoff GVT - event f, ", self.gvt)
+        self:kickoffGVT() 
     end
 
     local event = eventQ.pop(self.eventQueue) -- Next event
 
-    if self:optimisticRemove(event) then 
-        --print(self.rank, " Cancel reverse msgs and return")
-        -- event's inverse msg present in the queue. cancel each other and return true
-        return
-    elseif event.time > self.optimisticGVT + 5 * self.optimisticGVTThreshold then
+    --print(self.rank, " Cancel reverse msgs and return")
+    -- event's inverse msg present in the queue. cancel each other and return true
+    if self:cancelEvents(event) then return end
+    
+    if event.time > self.gvt + 5 * self.gvtThreshold then
         -- if too much in the future, do not process it
         --print(self.rank, " Too much in the future")
         eventQ.push(self.eventQueue, event)
         return
-    else -- no inverse msg in the queue
-        if event.antimessage then -- rollback
-            --print(self.rank, " Rollback")
-            --eventQ.push(self.eventQueue, event)
-            self:optimisticRollback(event.time, LP)
-        else
-            if LP.VT > event.time then -- causality violated
-                --print(self.rank, " Causality violated")
-                eventQ.push(self.eventQueue, event)
-                self:optimisticRollback(event.time, LP)
-            else -- execute positive event
-                --print(self.rank, " Execute event")
-                local state = copy(LP.saveState(LP)) -- Model's responsibility
-                LP.VT = event.time
+    end
 
-                local service = LP[event.name]
-                service(LP, event.data, event.tx, event.txId) -- generate() in model -> reqService() in entity
-                self.optimisticNumEvents = self.optimisticNumEvents + 1
+    -- no inverse msg in the queue
+    if event.antimessage then -- rollback
+        --print(self.rank, " Rollback")
+        --eventQ.push(self.eventQueue, event)
+        self:rollback(event.time, LP)
+    else
+        if LP.VT > event.time then -- causality violated
+            --print(self.rank, " Causality violated")
+            eventQ.push(self.eventQueue, event)
+            self:rollback(event.time, LP)
+        else -- execute positive event
+            --print(self.rank, " Execute event")
+            local state = copy(LP.saveState(LP)) -- Model's responsibility
+            LP.VT = event.time
 
-                local state = copy(LP.saveAntimessages(LP, state))
-                local t = {e = event, s = state,}
-                table.insert(LP.processedEvents, t)
-            end
+            local service = LP[event.name]
+            service(LP, event.data, event.tx, event.txId) -- generate() in model -> reqService() in entity
+            self.optNumEvents = self.optNumEvents + 1
+
+            local state = copy(LP.saveAntimessages(LP, state))
+            local t = {e = event, s = state,}
+            table.insert(LP.processedEvents, t)
         end
     end
 end
 
-function Simian.optimisticRemove(self, event)
+function Simian.cancelEvents(self, event)
     local ret = false 
     local otherEvents = {}
 
@@ -432,9 +438,9 @@ function Simian.optimisticRemove(self, event)
     return ret
 end
 
-function Simian.optimisticRollback(self, time, LP)
+function Simian.rollback(self, time, LP)
     local backup = false
-    if time < self.optimisticGVT then error("Rollback before GVT !!!") end
+    if time < self.gvt then error("Rollback before GVT !!!") end
 
     if #(LP.processedEvents) > 0 then
         --print(self.rank, " Rolling ", #(LP.processedEvents), LP.processedEvents[#(LP.processedEvents)].e.time, time)
@@ -446,7 +452,7 @@ function Simian.optimisticRollback(self, time, LP)
             backup = copy(t.s)
 
             LP.recoverAntimessages(LP, t.s, time)
-            self.optimisticNumEventsRolledBack = self.optimisticNumEventsRolledBack + 1
+            self.rollbacks = self.rollbacks + 1
 
             if #(LP.processedEvents) == 0 then break end 
         end
@@ -460,7 +466,7 @@ function Simian.optimisticRollback(self, time, LP)
     LP.VT = time
 end
 
-function Simian.optimisticFossilCollect(self, time)
+function Simian.fossilCollect(self, time)
     for k,entType in pairs(self.entities) do
         for _,ent in pairs(self.entities[k]) do
             local en = self.entities[k][_]

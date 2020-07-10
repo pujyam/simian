@@ -53,22 +53,21 @@ local function Entity(name, base)
                 .. " attempted to send with too little delay")
         end
 
+        local color = "white"
         local time = engine.now + offset
 
         if engine.optimistic then
             if offset == 0 then
                 offset = 0.000000001
             end
+            
             time = thisEntity.VT + offset
-        else
-            if time > engine.endTime then --No need to send this event
-                return
+            
+            if engine.color == "red" then
+                color = "red"
             end
-        end
-
-        local color = "white"
-        if engine.optimisticColor == "red" then
-            color = "red"
+        else
+            if time > engine.endTime then return end --No need to send this event
         end
 
         local rx = rx or thisEntity.name
@@ -110,10 +109,10 @@ local function Entity(name, base)
             eventQ.push(engine.eventQueue, e)
         else
             if engine.optimistic then
-                if engine.optimisticColor == "white" then
-                    engine.optimisticWhite = engine.optimisticWhite + 1
+                if engine.color == "white" then
+                    engine.whiteMsg = engine.whiteMsg + 1
                 else
-                    engine.optimistic_t_min = math.min(engine.optimistic_t_min, time)   
+                    engine.t_min = math.min(engine.t_min, time)   
                 end
                 engine.MPI:send(e, recvRank) --Send to others
             else
@@ -141,7 +140,7 @@ local function Entity(name, base)
                     eventQ.push(engine.eventQueue, event)
                 else
                     engine.MPI:send(event, recvRank) --Send to others
-                    engine.optimisticNumAntimessagesSent = engine.optimisticNumAntimessagesSent + 1
+                    engine.antimsgSent = engine.antimsgSent + 1
                 end
             end
         end
