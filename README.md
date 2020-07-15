@@ -44,7 +44,7 @@ Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar
 
 ### If using OpenMPI:
     (some later versions such as 1.8.3 have a serious bug in message size reporting; use 1.6.x)
-    Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
+    Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "OMPI"'
 
 ## To use the Python version SimianPie:
     SimianPie is tested to work with CPython 2.7.x, PyPy-v7.3.1, Python-3.7, and PyPy3.6-v7.3.1
