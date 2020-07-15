@@ -47,8 +47,8 @@ Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar
     Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
 
 ## To use the Python version SimianPie:
-    SimianPie is tested to work with CPython 2.7.x and PyPy 2.4.x
-    At present when needing MPI, SimianPie works with either MPICH2 using CTypes or using MPI4Py module - if only OpenMPI is available use Simian (Lua) or if Python version is unavoidable, then user should write a CTypes wrapper for OpenMPI similar to the distributed CTyped wrapper for MPICH 3.1.3
+    SimianPie is tested to work with CPython 2.7.x, PyPy-v7.3.1, Python-3.7, and PyPy3.6-v7.3.1
+    When using SimianPie along with MPI, SimianPie works with MPICH2 using CTypes - if only OpenMPI is available use SimianLua or if Python version is unavoidable, then user should write a CTypes wrapper for OpenMPI similar to the distributed CTyped wrapper for MPICH 3.1.3
         Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory or pass absolute path to the library to Simian() when creating the engine.
 
 ## Test with pHold app without MPI:
