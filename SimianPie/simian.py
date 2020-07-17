@@ -1,5 +1,5 @@
 ##############################################################################
-# © Copyright 2015-. Triad National Security, LLC. All rights reserved.
+# (c) Copyright 2015-. Triad National Security, LLC. All rights reserved.
 #
 # This program was produced under U.S. Government contract 89233218CNA000001 for Los Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC for the U.S. Department of Energy/National Nuclear Security Administration.
 #
@@ -1556,7 +1556,7 @@ class Simian(object):
 
         # Write simulation related information in header for each output log file
         self.out.write("Simian JIT PDES Engine (" + __SimianVersion__ + ")\n")
-        self.out.write("© Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.\n")
+        self.out.write("(c) Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.\n")
         self.out.write("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n\n")
         self.out.write("===================================================\n")
         self.out.write("------------SIMIAN-PIE JIT PDES ENGINE-------------\n")
@@ -1575,7 +1575,7 @@ class Simian(object):
         startTime = timeLib.clock()
         if self.rank == 0:
             print("Simian JIT PDES Engine (" + __SimianVersion__ + ")")
-            print("© Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.")
+            print("(c) Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.")
             print("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n")
             print("===================================================")
             print("------------SIMIAN-PIE JIT PDES ENGINE-------------")
