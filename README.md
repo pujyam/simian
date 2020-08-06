@@ -31,12 +31,12 @@ See Docs for API documentation (Somewhat dated, but still useable. Will be updat
 SimianLua/Examples has examples of SimianLua usage.
 SimianPie/Examples has examples of SimianPie usage.
 SimianJS/Examples has examples of SimianJS usage.
-Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar.
+Below usage guidelines are mostly for SimianLua, but SimianPie and SimianJS usages are very similar.
 
 ## If not using MPI:
     Set useMPI flag to false when initializing the Simian PDES Engine
 
-## To use MPI with Simian (Lua):
+## To use MPI with SimianLua:
 
 ### If using MPICH:
     (tested with 3.1.3)
@@ -44,11 +44,11 @@ Below examples for SimianLua usage, but SimianPie and SimianJS usage are similar
 
 ### If using OpenMPI:
     (some later versions such as 1.8.3 have a serious bug in message size reporting; use 1.6.x)
-    Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "MPI"'
+    Set useMPI flag to true. Set a link to libmpi.[dylib/so/dll] in the top directory, and then comment within file Simian/MPI.lua line 'require "MPICH"' and uncomment in file Simian/MPI.lua line 'require "OMPI"'
 
-## To use the Python version SimianPie:
-    SimianPie is tested to work with CPython 2.7.x and PyPy 2.4.x
-    At present when needing MPI, SimianPie works with either MPICH2 using CTypes or using MPI4Py module - if only OpenMPI is available use Simian (Lua) or if Python version is unavoidable, then user should write a CTypes wrapper for OpenMPI similar to the distributed CTyped wrapper for MPICH 3.1.3
+## To use the Python version, SimianPie:
+    SimianPie is tested to work with CPython 2.7.x, PyPy-v7.3.1, Python-3.7, and PyPy3.6-v7.3.1
+    When using SimianPie along with MPI, SimianPie works with MPICH2 using CTypes - if only OpenMPI is available use SimianLua or if Python version is unavoidable, then user should write a CTypes wrapper for OpenMPI similar to the distributed CTyped wrapper for MPICH 3.1.3
         Set useMPI flag to true. Set a link to libmpich.[dylib/so/dll] in the top directory or pass absolute path to the library to Simian() when creating the engine.
 
 ## Test with pHold app without MPI:
