@@ -1,5 +1,5 @@
 ##############################################################################
-# © Copyright 2015-. Triad National Security, LLC. All rights reserved.
+# (c) Copyright 2015-. Triad National Security, LLC. All rights reserved.
 #
 # This program was produced under U.S. Government contract 89233218CNA000001 for Los Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC for the U.S. Department of Energy/National Nuclear Security Administration.
 #
@@ -54,16 +54,24 @@
 #
 ##############################################################################
 
-__SimianVersion__ = "1.65"
-
+from __future__ import print_function
 import os, sys
 import hashlib, heapq
 import time as timeLib
 import types #Used to bind Service at runtime to specific instances
 import ctypes as C #For FFI of MPICH
 
+__SimianVersion__ = "1.65"
+
 # If mpich library is not explicitly provided when Simian is invoked with useMPI=True, then check for libmpich in parent directory of this file
 defaultMpichLibName = os.path.join(os.path.dirname(__file__), "..", "libmpich.dylib")
+
+#===========================================================================================
+# Select a good performance timer clock based on Python version
+#===========================================================================================
+if sys.version_info >= (3, 7): perfTime = timeLib.perf_counter
+elif sys.version_info >= (2, 7): perfTime = timeLib.clock
+else: SimianError("Python version is not >= 2.7 or 3.7")
 
 #===========================================================================================
 # utils.py
@@ -1506,10 +1514,12 @@ class MPI(object):
 # Main simumation engine class. Derive the PDES engine instance from this class.
 #===========================================================================================
 class Simian(object):
-    def __init__(self, simName, startTime, endTime, minDelay=1, useMPI=False, mpiLibName=defaultMpichLibName):
+    # Note: changed interface here to add silent option and default values for start and end times
+    def __init__(self, simName='simian_run', startTime=0.0, endTime=10e10, minDelay=1, useMPI=False, mpiLibName=defaultMpichLibName, silent=False):
         self.Entity = Entity #Include in the top Simian namespace
 
         self.name = simName
+        self.silent = silent
         self.startTime = startTime
         self.endTime = endTime
         self.minDelay = minDelay
@@ -1556,7 +1566,7 @@ class Simian(object):
 
         # Write simulation related information in header for each output log file
         self.out.write("Simian JIT PDES Engine (" + __SimianVersion__ + ")\n")
-        self.out.write("© Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.\n")
+        self.out.write("(c) Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.\n")
         self.out.write("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n\n")
         self.out.write("===================================================\n")
         self.out.write("------------SIMIAN-PIE JIT PDES ENGINE-------------\n")
@@ -1572,10 +1582,10 @@ class Simian(object):
         del self.out
 
     def run(self): #Run the simulation
-        startTime = timeLib.clock()
-        if self.rank == 0:
+        startTime = perfTime()
+        if self.rank == 0 and not self.silent:
             print("Simian JIT PDES Engine (" + __SimianVersion__ + ")")
-            print("© Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.")
+            print("(c) Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.")
             print("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n")
             print("===================================================")
             print("------------SIMIAN-PIE JIT PDES ENGINE-------------")
@@ -1629,8 +1639,8 @@ class Simian(object):
         else:
             totalEvents = numEvents
 
-        elapsedTime = timeLib.clock() - startTime
-        if self.rank == 0:
+        elapsedTime = perfTime() - startTime
+        if self.rank == 0 and not self.silent:
             print("SIMULATION COMPLETED IN: " + str(elapsedTime) + " SECONDS")
             print("SIMULATED EVENTS: " + str(totalEvents))
             print("EVENTS PER SECOND: " + str(totalEvents/elapsedTime))
