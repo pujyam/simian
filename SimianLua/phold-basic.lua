@@ -23,50 +23,84 @@ package.path = "Simian/?.lua;" .. package.path
 local Simian = require "simian"
 local ln, random = math.log, math.random
 
-local opt = (tostring(arg[1]):lower() == "true")
-local simName, startTime, endTime, minDelay, useMPI = "PHOLD", 0, 1000, 1, true
+local count = tonumber(arg[1])
+local p_loc = tonumber(arg[2])
+local p_receive = tonumber(arg[3])
+local p_receive_upt = p_receive
 
-local count = 2
-local lookahead = minDelay
+local endTime = tonumber(arg[4])
+
+local r_min = (1 - p_receive) ^ count 
 
 local function exponential(lambda)
     return -ln(random())/lambda
 end
 
+local simName, startTime, minDelay, useMPI = "PHOLD", 0, 1, true
 local Node = Simian.Entity("Node")
-local targetId = 0
-local offset = 0
+
+local report2 = true
+local report3 = true
+local report4 = true
 
 function Node:generate(...)
-    offset = lookahead
 
-    local r = random()
-    if (r < 0.9) then targetId = (self.engine.rank + 1) % 2
-    else targetId = self.engine.rank end
+	if self.engine.gvt > endTime / 4 and report2 then
+        p_receive = 0
+        report2 = false
+    end
 
-    --print (self.engine.rank .. " sends to " .. targetId)
-    self:reqService(offset, "generate", nil, "Node", targetId)
+	if self.engine.gvt > 2 * (endTime / 4) and report3 then
+        p_receive = p_receive_upt
+        report3 = false
+    end
+
+    if self.engine.gvt > 3 * (endTime / 4) and report4 then
+        p_receive = 0
+        report4 = false
+    end
+
+	local offset = random()	+ minDelay
+	self:reqService(offset, "localGen", "Node") 
+
+	if random() < p_loc then self:reqService(offset, "generate", nil)
+	else 
+	    local DestIndex
+
+        if p_receive == 1.0 then DestIndex = 0
+        elseif p_receive == 0 then DestIndex = math.floor(random() * count) -- Uniform
+        else
+            local U = (1.0 - r_min) * random() + r_min 
+            DestIndex = math.floor(math.ceil(math.log(U) / math.log(1.0 - p_receive))) - 1 
+        end
+ 	
+		--if self.num == 0 then print ("Remote", offset, self.VT) end
+		self:reqService(offset, "generate", nil, "Node", DestIndex) 
+	end
+end
+
+function Node:localGen(...)
+	--if self.num == 0 then print ("Local", self.VT) end
+
 end
 
 function Node:saveState()
-    local state = {tid = targetId, off = offset,}
+    local state = {}
     return state
 end
 
 function Node:recoverState(state)
-    targetId = state.tid
-    offset = state.off
 end
 
 --Initialize Simian
-Simian:init(simName, startTime, endTime, minDelay, useMPI, opt)
+Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
 for i=0,count-1 do
     Simian:addEntity("Node", Node, i)
 end
 
 for i=0,count-1 do
-    Simian:schedService(0, "generate", nil, "Node", i)
+    Simian:schedService(1, "generate", nil, "Node", i)
 end
 
 Simian:run()

@@ -34,11 +34,11 @@ local ANYSRC, ANYTAG, SUCCESS, COMMWORLD, BYTE, DOUBLE, LONG, MIN, SUM
         mpi.MPI_MIN, mpi.MPI_SUM
 local MPI_Init, MPI_Finalize, MPI_Comm_rank, MPI_Comm_size,
     MPI_Iprobe, MPI_Probe, MPI_Send, MPI_Isend, MPI_Recv, MPI_Get_count,
-    MPI_Get_elements, MPI_Allreduce, MPI_Barrier, MPI_Alltoall
+    MPI_Get_elements, MPI_Allreduce, MPI_Barrier, MPI_Alltoall, MPI_Allgather
         = mpi.MPI_Init, mpi.MPI_Finalize, mpi.MPI_Comm_rank,
         mpi.MPI_Comm_size, mpi.MPI_Iprobe, mpi.MPI_Probe,
         mpi.MPI_Send, mpi.MPI_Isend, mpi.MPI_Recv, mpi.MPI_Get_count,
-        mpi.MPI_Get_elements, mpi.MPI_Allreduce, mpi.MPI_Barrier, mpi.MPI_Alltoall
+        mpi.MPI_Get_elements, mpi.MPI_Allreduce, mpi.MPI_Barrier, mpi.MPI_Alltoall, mpi.MPI_Allgather
 
 function MPI.init(self)
     if MPI_Init(nil, nil) == SUCCESS then
@@ -59,8 +59,12 @@ function MPI.init(self)
         self.numRanks = MPI:size()
 
         self.sndCounts = ffi.new("long[?]", self.numRanks) --Preallocate
-        for i=0,(self.numRanks-1) do self.sndCounts[i] = 0 end
+        for i = 0, (self.numRanks - 1) do self.sndCounts[i] = 0 end
         self.rcvCounts = ffi.new("long[?]", self.numRanks) --Preallocate
+
+        self.qs = ffi.new("double[1]")
+        self.queueSizes = ffi.new("double[?]", self.numRanks) --Preallocate
+        for i = 0, (self.numRanks - 1) do self.queueSizes[i] = 0 end
 
         return false
     end
@@ -179,6 +183,30 @@ function MPI.allreduce(self, partial, op)
     end
     return self.dtemp[1]
 end
+
+function MPI.allgather(self, queueSize)
+    self.qs[0] = queueSize
+    if (MPI_Allgather(self.qs, 1, self.DOUBLE, self.queueSizes, 1, self.DOUBLE, self.comm) ~= SUCCESS) then
+        error("Could not Allgather in MPI")    
+    end
+
+    local total = 0 
+    for i = 0, self.numRanks - 1 do
+        --if MPI.rank(self) == 0 then print(self.queueSizes[i]) end
+        total = total + self.queueSizes[i]
+    end
+    local avg = total / self.numRanks 
+
+    total = 0
+    for i = 0, self.numRanks - 1 do
+        total = total + ((self.queueSizes[i] - avg) ^ 2)
+        self.queueSizes[i] = 0
+    end
+    
+    local std_dev = (total / self.numRanks) ^ 0.5 
+    return std_dev / avg
+end
+
 
 function MPI.barrier(self)
     if (MPI_Barrier(self.comm) ~= SUCCESS) then

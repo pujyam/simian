@@ -62,9 +62,11 @@ int MPI_Get_elements(const MPI_Status *status, MPI_Datatype datatype, int *count
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm);
 int MPI_Barrier(MPI_Comm comm);
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm);
+
+int MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm);
 ]]
 
 --Dynamically link the MPICH library into the global namespace
 if not pcall(function() return ffi.C.MPI_Init end) then
-    return ffi.load("libmpich", true)
+    return ffi.load("/home/aeker801/mpich-install/lib/libmpich.so", true)
 end

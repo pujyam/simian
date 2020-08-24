@@ -57,6 +57,11 @@ function eventQ.pop(list)
     return pop
 end
 
+function eventQ.clear(list)
+    count = #list
+    for i = 0, count do list[i]=nil end
+end
+
 --[[TestCase
 myList = {}
 input = {7878, 78217, 90, 1, 425, 10}

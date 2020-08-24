@@ -54,21 +54,12 @@ local function Entity(name, base)
         end
 
         local color = "white"
-        local time = engine.now + offset
-
         if engine.optimistic then
-            if offset == 0 then
-                offset = 0.000000001
-            end
-            
-            time = thisEntity.VT + offset
-            
-            if engine.color == "red" then
-                color = "red"
-            end
-        else
-            if time > engine.endTime then return end --No need to send this event
-        end
+            if offset == 0 then offset = 0.000000001 end
+            if engine.color == "red" then color = "red" end
+		end
+        
+		local time = thisEntity.VT + offset
 
         local rx = rx or thisEntity.name
         local rxId = rxId or thisEntity.num
@@ -100,11 +91,12 @@ local function Entity(name, base)
                 GVT = false,
                 color = color,
             }
-            table.insert(thisEntity.sentEvents, ae)
+            table.insert(thisEntity.antiEvents, ae)
         end
 
         local recvRank = engine:getOffsetRank(rx, rxId)
 
+        --print (engine.rank .. " <- " .. recvRank)
         if recvRank == engine.rank then --Send to thisEntity
             eventQ.push(engine.eventQueue, e)
         else
@@ -114,6 +106,8 @@ local function Entity(name, base)
                 else
                     engine.t_min = math.min(engine.t_min, time)   
                 end
+                
+                engine.sends = engine.sends + 1
                 engine.MPI:send(e, recvRank) --Send to others
             else
                 engine.MPI:sendAndCount(e, recvRank) --Send to others
@@ -122,12 +116,12 @@ local function Entity(name, base)
     end
 
     c.saveAntimessages = function(thisEntity, state)
-        state.antimessages = thisEntity.sentEvents
-        thisEntity.sentEvents = {}
+        state.antimessages = thisEntity.antiEvents
+        thisEntity.antiEvents = {}
         return state
     end
 
-    c.recoverAntimessages = function(thisEntity, state, time)
+    c.sendAntimessages = function(thisEntity, state, time)
         local engine = thisEntity.engine --Get the engine for this entity
         
         if state.antimessages then
@@ -139,8 +133,14 @@ local function Entity(name, base)
                 if recvRank == engine.rank then
                     eventQ.push(engine.eventQueue, event)
                 else
-                    engine.MPI:send(event, recvRank) --Send to others
                     engine.antimsgSent = engine.antimsgSent + 1
+
+                    if engine.optimistic then 
+                        engine.MPI:send(event, recvRank) --Send to others
+                        engine.sends = engine.sends + 1 
+                    else
+                        engine.MPI:sendAndCount(e, recvRank)
+                    end
                 end
             end
         end
@@ -329,7 +329,7 @@ local function Entity(name, base)
                 -- For optimistic processing
                 VT = 0,
                 processedEvents = {},
-                sentEvents = {},
+                antiEvents = {},
             }
             setmetatable(obj, c) --The table "c" will be the metatable for all entity instances
 
