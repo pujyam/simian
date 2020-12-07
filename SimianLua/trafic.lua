@@ -12,94 +12,75 @@ THIS SOFTWARE IS PROVIDED BY LOS ALAMOS NATIONAL SECURITY, LLC AND CONTRIBUTORS 
 ]]
 
 --[[
---Author: Nandakishore Santhi
---Date: 23 November, 2014
+--Author: Ali Eker 
+--Date: September, 2020
 --Copyright: Open source, must acknowledge original author
---Purpose: JITed PDES Engine in LuaJIT
---  Simple example simulation script
+--Purpose: Epidemics Application for Hybrid-PDES SimianLua 
 --]]
+
 package.path = "Simian/?.lua;" .. package.path
 local Simian = require "simian"
-local ln, random = math.log, math.random
 
-local count = tonumber(arg[1])
-local p_loc = tonumber(arg[2])
-local p_receive = tonumber(arg[3])
-local p_receive_upt = p_receive
+local res_count = tonumber(arg[1])
+local bus_count = tonumber(arg[2])
+local endTime = tonumber(arg[3])
 
-local endTime = tonumber(arg[4])
-
-local r_min = (1 - p_receive) ^ count 
-
-local function exponential(lambda)
-    return -ln(random())/lambda
-end
-
-local simName, startTime, minDelay, useMPI = "PHOLD", 0, 1, true
-local Node = Simian.Entity("Node")
-
-local report2 = true
-local report3 = true
-local report4 = true
-
-function Node:generate(...)
-
-	if self.engine.gvt > endTime / 4 and report2 then
-        p_receive = 0
-        report2 = false
-    end
-
-	if self.engine.gvt > 2 * (endTime / 4) and report3 then
-        p_receive = p_receive_upt
-        report3 = false
-    end
-
-    if self.engine.gvt > 3 * (endTime / 4) and report4 then
-        p_receive = 0
-        report4 = false
-    end
-
-	local offset = random()	+ minDelay
-	self:reqService(offset, "localGen", "Node") 
-
-	if random() < p_loc then self:reqService(offset, "generate", nil)
-	else 
-	    local DestIndex
-
-        if p_receive == 1.0 then DestIndex = 0
-        elseif p_receive == 0 then DestIndex = math.floor(random() * count) -- Uniform
-        else
-            local U = (1.0 - r_min) * random() + r_min 
-            DestIndex = math.floor(math.ceil(math.log(U) / math.log(1.0 - p_receive))) - 1 
-        end
- 	
-		--if self.num == 0 then print ("Remote", offset, self.VT) end
-		self:reqService(offset, "generate", nil, "Node", DestIndex) 
-	end
-end
-
-function Node:localGen(...)
-	--if self.num == 0 then print ("Local", self.VT) end
-
-end
-
-function Node:saveState()
-    local state = {}
-    return state
-end
-
-function Node:recoverState(state)
-end
-
---Initialize Simian
+local simName, startTime, minDelay, useMPI = "EPI", 0, 1, true
 Simian:init(simName, startTime, endTime, minDelay, useMPI)
 
-for i = 0, count - 1 do
-    Simian:addEntity("Node", Node, i)
+local Residential = Simian.Entity("Residential")
+do
+    function Residential:__init(...)
+        self.num_agents = 4
+        
+        -- Parents go to job at 8 am
+        for i = 0, 1 do
+            local destJob = math.floor(math.random() * bus_count)        
+            self:reqService(8, "arriveJob", nil, "Business", destJob) 
+        end
+    end
+
+    function Residential:arriveHome()
+        local destJob = math.floor(math.random() * bus_count)        
+        self:reqService(16, "arriveJob", nil, "Business", destJob) 
+    end
+
+    function Residential:saveState()
+        local state = {}
+        return state
+    end
+
+    function Residential:recoverState(state)
+    end
 end
 
-for i = 0, count - 1 do
-    Simian:schedService(1, "generate", nil, "Node", i)
+local Business = Simian.Entity("Business")
+do
+    function Business:__init(...)
+        self.num_agents = 0
+    end
+
+    function Business:arriveJob()
+        -- go back to home
+        local destHome = math.floor(math.random() * res_count)        
+        self:reqService(8, "arriveHome", nil, "Residential", destHome) 
+    end
+
+    function Business:saveState()
+        local state = {}
+        return state
+    end
+
+    function Business:recoverState(state)
+    end
+end
+
+for i = 0, bus_count - 1 do
+    Simian:addEntity("Business", Business, i)
+end
+
+for i = 0, res_count - 1 do
+    Simian:addEntity("Residential", Residential, i)
 end
 
 Simian:run()

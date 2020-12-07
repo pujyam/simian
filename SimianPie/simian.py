@@ -318,6 +318,8 @@ class Entity(object):
                     engine.whiteMsg += 1
                 else:
                     engine.t_min = min(engine.t_min, time)
+                
+                engine.sends = engine.sends + 1
                 engine.MPI.send(e, recvRank)
             else:
                 #print (e)
@@ -340,8 +342,12 @@ class Entity(object):
                     engine.ec += 1
                     heapq.heappush(engine.eventQueue, (event["time"], engine.ec, event))
                 else:
-                    engine.MPI.send(event, recvRank)
                     engine.antimsgSent += 1
+                    if engine.optimistic:
+                        engine.MPI.send(event, recvRank)
+                        engine.sends = engine.sends + 1 
+                    else:
+                        engine.MPI.sendAndCount(event, recvRank)
 
     def attachService(self, name, fun):
         #Attaches a service at runtime to instance
@@ -1400,6 +1406,7 @@ def loadMPICH(mpichLib):
     mpi.MPI_Allreduce.restype = C.c_int
     mpi.MPI_Barrier.restype = C.c_int
     mpi.MPI_Alltoall.restype = C.c_int
+    mpi.MPI_Allgather.restype = C.c_int
 
     mpi.MPI_Init.argtypes = [C.POINTER(C.c_int), C.POINTER(C.c_char_p)]
     mpi.MPI_Finalize.argtypes = []
@@ -1415,7 +1422,7 @@ def loadMPICH(mpichLib):
     mpi.MPI_Allreduce.argtypes = [C.c_void_p, C.c_void_p, C.c_int, mpi.MPI_Datatype, mpi.MPI_Op, mpi.MPI_Comm]
     mpi.MPI_Barrier.argtypes = [mpi.MPI_Comm]
     mpi.MPI_Alltoall.argtypes = [C.c_void_p, C.c_int, mpi.MPI_Datatype, C.c_void_p, C.c_int, mpi.MPI_Datatype, mpi.MPI_Comm]
-
+    mpi.MPI_Allgather.argtypes = [C.c_void_p, C.c_int, mpi.MPI_Datatype, C.c_void_p, C.c_int, mpi.MPI_Datatype, mpi.MPI_Comm] 
     return mpi
 #===========================================================================================
 
@@ -1467,6 +1474,10 @@ class MPI(object):
         self.sndCounts = (C.c_long * self.numRanks)()
         for i in range(len(self.sndCounts)): self.sndCounts[i] = 0
         self.rcvCounts = (C.c_long * self.numRanks)()
+
+        self.qs = C.c_double()
+        self.queueSizes = (C.c_double * self.numRanks)()
+        for i in range(len(self.queueSizes)): self.queueSizes[i] = 0
 
     def finalize(self):
         if mpi.MPI_Finalize() == mpi.MPI_SUCCESS:
@@ -1563,6 +1574,30 @@ class MPI(object):
         if mpi.MPI_Send(m, len(m), self.BYTE, dst, tag, self.comm) != mpi.MPI_SUCCESS:
             raise SimianError("MPI.sendAndCount(): error!")
         self.sndCounts[dst] += 1
+    
+    def allgather(self, queueSize):
+        self.qs = C.c_double(queueSize)
+
+        if mpi.MPI_Allgather (C.byref(self.qs), 1, self.DOUBLE, self.queueSizes, 1, self.DOUBLE, self.comm) != mpi.MPI_SUCCESS:
+            raise SimianError ("MPI_Allgather error !")
+
+        total = 0
+        for i in range(self.numRanks): 
+            #print (self.queueSizes[i], end = " ")
+            total += self.queueSizes[i]
+        #print ("")
+        if total == 0: return 1000000
+        
+        avg = total / self.numRanks
+
+        total = 0
+        for i in range(self.numRanks):
+            total += ((self.queueSizes[i] - avg) ** 2)
+            self.queueSizes[i] = 0
+
+        std_dev = (total / self.numRanks) ** 0.5
+        return std_dev / avg
+
 #===========================================================================================
 
 #===========================================================================================
@@ -1570,7 +1605,7 @@ class MPI(object):
 # Main simumation engine class. Derive the PDES engine instance from this class.
 #===========================================================================================
 class Simian(object):
-    def __init__(self, simName, startTime, endTime, minDelay=1, useMPI=False, opt = False, mpiLibName=defaultMpichLibName):
+    def __init__(self, simName, startTime, endTime, minDelay=1, useMPI=False, mpiLibName=defaultMpichLibName):
         self.Entity = Entity #Include in the top Simian namespace
 
         self.name = simName
@@ -1595,7 +1630,6 @@ class Simian(object):
         #which is used in the global reduce to ensure global time is set to
         #the correct minimum.
         self.infTime = endTime + 2*minDelay
-        self.minSent = self.infTime
 
         #[[Base rank is an integer hash of entity's name]]
         self.baseRanks = {}
@@ -1615,13 +1649,10 @@ class Simian(object):
             self.rank = 0
             self.size = 1
 
-        # For optimistic
-        self.optimistic = opt
-        if self.optimistic:
-            if not self.useMPI or self.size == 1:
-                # need > 1 rank for optimistic
-                self.optimistic = False
+        self.numEvents = 0
+        self.nwEvents = 0
 
+        self.optimistic = False
         self.gvt = 0
         self.optNumEvents = 0
         self.rollbacks = 0
@@ -1631,30 +1662,39 @@ class Simian(object):
         self.color = "white"
         self.countRound = 0
         self.t_min = self.infTime
-        self.whiteMsg= 0
+        self.whiteMsg = 0
 
         # For GVT interval
-        self.gvtThreshold = 50
-        self.gvtMemReq = 50
-        self.gvtCounter = 0
-        self.gvtInterval = 500
+        self.gvtInterval = 50
         self.gvtCompute = 0
+        self.gvtCounter = 0
+        #self.gvtThreshold = 50
+        #self.gvtMemReq = 50
 
         #One output file per rank
         if self.rank == 0: self.out = open("data", "a+")
-        #self.out = open(self.name + "." + str(self.rank) + ".out", "w")
 
-        # Write simulation related information in header for each output log file
-        #self.out.write("Simian JIT PDES Engine (" + __SimianVersion__ + ")\n")
-        #self.out.write("© Copyright 2015-. Triad National Security, LLC. All rights reserved. Released under BSD 3-clause license.\n")
-        #self.out.write("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n\n")
-        #self.out.write("===================================================\n")
-        #self.out.write("------------SIMIAN-PIE JIT PDES ENGINE-------------\n")
-        #self.out.write("------------       VERSION: " + __SimianVersion__ + "      -------------\n")
-        #self.out.write("===================================================\n")
-        #if self.useMPI: self.out.write("MPI: ON\n")
-        #else: self.out.write("MPI: OFF\n")
-        #self.out.write("===================================================\n\n")
+        # For Cons - Opt Switch: If std_dev less than T, switch to OPT
+        if self.size == 8: self.switchConsThres = 1.2
+        if self.size == 16: self.switchConsThres = 1.5
+        if self.size == 32: self.switchConsThres = 1.5
+        if self.size == 64: self.switchConsThres = 2
+        if self.size == 128: self.switchConsThres = 2.3
+        if self.size == 256: self.switchConsThres = 3
+        #self.switchConsThres = 0
+
+        self.switchCounter = 0
+        self.checkSwitch = 50 # Interval to check switching conditions from CONS to OPT
+        self.anti = 0 # Counts annti messages in CONS 
+
+        # Opt - Cons Switch
+        # Efficiency = (pos - neg) / pos. If eff less than T, switch to CONS
+        self.switchOptThres = -10000 
+
+        self.sends = 0 # To ensure all messages are received before switching to CONS
+        self.pos = 0 # To compute eff
+        self.neg = 0
+        self.fel = 64 # Forward execution limit
 
     def exit(self):
         sys.stdout.flush()
@@ -1663,155 +1703,284 @@ class Simian(object):
 
     def run(self): #Run the simulation
         if self.rank == 0:
-            #print("Simian JIT PDES Engine (" + __SimianVersion__ + ")")
-            #print("© Copyright 2015.Triad National Security, LLC.All rights reserved. Released under BSD 3-clause license.")
-            #print("Author: Nandakishore Santhi (with other contributors as acknowledged in source code)\n")
-            print("===================================================")
+            print("\n===================================================")
             print("------------SIMIAN-PIE JIT PDES ENGINE-------------")
-            #print("------------       VERSION: " + __SimianVersion__ + "    -------------")
             print("===================================================")
             if self.useMPI: print("MPI: ON, size: " + str(self.size))
             else: print("MPI: OFF")
-            if self.optimistic: print("Optimistic Mode Enabled")
-            else: print("Conservative Mode Enabled")
-            print("===================================================\n")
+            if self.size > 1: print("Conservative-Optimistic Hybrid Mode")
+            print("===================================================")
             sys.stdout.flush()
 
-        numEvents = 0
+        globalMinLeft = self.startTime
+        self.running = True
+        self.MPI.barrier()
         startTime = timeLib.clock()
 
-        if self.optimistic:
-            self.running = True
-            self.gvt = self.startTime
+        while globalMinLeft <= self.endTime:
+            epoch = globalMinLeft + self.minDelay
 
-            while self.gvt < self.endTime:
-                while self.MPI.iprobe(): # True means event in queue
-                    remoteEvent = self.MPI.recvAnySize()
-                    if remoteEvent["GVT"]: # if message is a GVT calculation
-                        self.calcGVT(remoteEvent)
-                    else: # event or anti-event
-                        if not remoteEvent["antimessage"] and remoteEvent["color"] == "white":
-                            self.whiteMsg -= 1
-
-                        self.ec += 1
-                        heapq.heappush(self.eventQueue, (remoteEvent["time"], self.ec, remoteEvent))
-
-                if len(self.eventQueue):
-                    #print (str(self.rank) + ": " + str(self.gvt))
-                    self.processNextEvent()
+            while len(self.eventQueue) > 0 and self.eventQueue[0][0] < epoch:
+                (time ,_, event) = heapq.heappop(self.eventQueue) #Next event
+                entity = self.entities[event["rx"]][event["rxId"]]
                 
-                if self.rank == 0 and self.color == "white":
-                    if self.gvtCounter >= self.gvtInterval:
-                        self.kickoffGVT()
-                        self.gvtCounter = 0
-                    else:
-                        self.gvtCounter += 1
-        else:
-            self.running = True
-            globalMinLeft = self.startTime
-            while globalMinLeft <= self.endTime:
-                epoch = globalMinLeft + self.minDelay
+                
+                if event["antimessage"]:
+                    self.anti += 1
+                    self.rollback(time, entity)
+                    break
 
-                self.minSent = self.infTime
-                while len(self.eventQueue) > 0 and self.eventQueue[0][0] < epoch:
-                    (time ,_, event) = heapq.heappop(self.eventQueue) #Next event
-                    if self.now > time:
-                        raise SimianError("Out of order event: now=%f, evt=%f" % self.now, time)
-                    self.now = time #Advance time
+                if self.now > time:  
+                    self.anti += 1
+                    self.rollback(time, entity)
+                    break
+                    
+                # Advance time
+                entity.VT = time 
+                self.now = time 
 
-                    #Simulate event
-                    entity = self.entities[event["rx"]][event["rxId"]]
-                    service = getattr(entity, event["name"])
-                    service(event["data"], event["tx"], event["txId"]) #Receive TO BE CGECJED
+                #Simulate event
+                service = getattr(entity, event["name"])
+                service(event["data"], event["tx"], event["txId"]) #Receive TO BE CGECJED
+                self.numEvents += 1
 
-                    numEvents = numEvents + 1
+            if self.size > 1:
+                toRcvCount = self.MPI.alltoallSum()
+                recv = toRcvCount
 
-                if self.size > 1:
-                    toRcvCount = self.MPI.alltoallSum()
-                    while toRcvCount > 0:
-                        self.MPI.probe()
-                        remoteEvent = self.MPI.recvAnySize()
-                        self.ec += 1
-                        heapq.heappush(self.eventQueue, (remoteEvent["time"], self.ec, remoteEvent))
-                        toRcvCount -= 1
+                while toRcvCount > 0:
+                    self.MPI.probe()
+                    remoteEvent = self.MPI.recvAnySize()
+                    self.ec += 1
+                    heapq.heappush(self.eventQueue, (remoteEvent["time"], self.ec, remoteEvent))
+                    toRcvCount -= 1
 
-                    minLeft = self.infTime
-                    if len(self.eventQueue) > 0: minLeft = self.eventQueue[0][0]
-                    globalMinLeft = self.MPI.allreduce(minLeft, self.MPI.MIN) #Synchronize minLeft
-                else:
-                    globalMinLeft = self.infTime
-                    if len(self.eventQueue) > 0: globalMinLeft = self.eventQueue[0][0]
+                if self.switchCounter == self.checkSwitch:
+                    self.switchCounter = 0
+                    sigma = self.MPI.allgather(recv)
+
+                    #if self.rank == 0: print ("CONS[" + str(self.gvt) + "] check for OPT -> " + str(sigma))
+                    sys.stdout.flush()
+                    if sigma <= self.switchConsThres:
+                        if self.rank == 0: print ("----> Switch to OPT " + str(self.gvt) + " " + str(sigma))
+                        sys.stdout.flush()
+                        self.optimistic = True
+                        self.optimisticEngine()
+    
+                else: self.switchCounter += 1
+
+                minLeft = self.infTime
+                if len(self.eventQueue) > 0: minLeft = self.eventQueue[0][0]
+                globalMinLeft = self.MPI.allreduce(minLeft, self.MPI.MIN) 
+                self.gvt = globalMinLeft
+                self.nwEvents += 1
+            else:
+                globalMinLeft = self.infTime
+                if len(self.eventQueue) > 0: globalMinLeft = self.eventQueue[0][0]
 
         elapsedTime = timeLib.clock() - startTime
         self.running = False
+        optEvents = rollEvents = antiEvents = antiCons = totalEvents = totalAllEvents = 0
 
-        if self.optimistic:
-            self.MPI.barrier()
-            totalEvents = self.MPI.allreduce(self.optNumEvents, self.MPI.SUM)
-            self.MPI.barrier()
-            rollEvents = self.MPI.allreduce(self.rollbacks,self.MPI.SUM)
-            self.MPI.barrier()
-            antiEvents = self.MPI.allreduce(self.antimsgSent, self.MPI.SUM)
-        else:   
-            if self.size > 1:
-                self.MPI.barrier()
-                totalEvents = self.MPI.allreduce(numEvents, self.MPI.SUM)
-            else:
-                totalEvents = numEvents
+        if self.size > 1:
+            optEvents =  math.floor(self.MPI.allreduce(self.optNumEvents, self.MPI.SUM))
+            rollEvents =  math.floor(self.MPI.allreduce(self.rollbacks,self.MPI.SUM))
+            antiEvents =  math.floor(self.MPI.allreduce(self.antimsgSent, self.MPI.SUM))
+            antiCons =  math.floor(self.MPI.allreduce(self.anti, self.MPI.SUM))
 
-        if self.rank == 0:
-            print("SIMULATION COMPLETED IN: " + str(elapsedTime) + " SECONDS")
-            print("SIMULATED EVENTS: " + str(totalEvents))
+            totalEvents =  math.floor(self.MPI.allreduce(self.numEvents, self.MPI.SUM))
+            totalAllEvents = totalEvents + optEvents
 
-            if self.optimistic:
-                print ("    NUMBER OF EVENTS ROLLED BACK %s " % (rollEvents))
-                print ("    NUMBER OF ANTIMESSAGES SENT %s " % (antiEvents))
-                print ("    COMMITTED EVENTS: %s " % (totalEvents - rollEvents))
-                print ("    COMMITTED EVENT RATE: %s" % ((totalEvents - rollEvents)/elapsedTime))
-                print ("    Efficiency: " + str(math.floor((totalEvents - rollEvents) * 100 / totalEvents)) + "%")
-                print ("    # GVT computations: %s" % self.gvtCompute)
-                print ("        GVT Interval: " + str(self.gvtInterval))
-                print ("        GVT Threshold: " + str(self.gvtThreshold))
-                print ("        GVT MemReq: " + str(self.gvtMemReq))
-                self.out.write(str((totalEvents - rollEvents)/elapsedTime) + "\n")
-            else:
-                print("EVENT RATE: " + str(totalEvents/elapsedTime))
-                self.out.write(str(totalEvents/elapsedTime) + "\n")
-                print("===================================================")
+        if self.size > 1 and self.rank == 0:
+            print ("SIMULATION COMPLETED IN: " + str(elapsedTime) + " SECONDS")
+            print ("SIMULATED EVENTS: " + str(totalAllEvents))
+            print ("    Conservative Events: " + str(totalEvents))
+            print ("        Check Switch Interval: " + str(self.checkSwitch))
+            print ("        # Events Rolled Back: " + str(antiCons))
+            print ("        # All_reduce: " + str(self.nwEvents))
+            print ("    Optimisitc Events: " + str(optEvents))
+            print ("        Forward Execution Limit: " + str(self.fel))
+            print ("        GVT Interval: " + str(self.gvtInterval))
+            print ("        # Events Rolled Back: " + str(rollEvents))
+            print ("        # Antimessages Sent: " + str(antiEvents))
+            print ("        # Net Events: " + str((optEvents - rollEvents)))
+            print ("        # GVT Computations: " + str(self.gvtCompute))
+            if optEvents > 0: 
+                print ("        Efficiency: " + str(math.floor((optEvents - rollEvents) * 100 / optEvents)) + "%")
+            print ("    Net Event Rate: " + str(((totalAllEvents - rollEvents) / elapsedTime)))
+            print("===========================================")
+            self.out.write(str((totalAllEvents - rollEvents)/elapsedTime) + "\n")
+
+            if self.size == 1:
+                print ("SIMULATION COMPLETED IN: " + str(elapsedTime) + " SECONDS")
+                print ("SIMULATED EVENTS: " + str(self.numEvents))
+                print ("    Event Rate: " + str(self.numEvents / elapsedTime))
+                self.out.write(str(self.numEvents / elapsedTime) + "\n")
             sys.stdout.flush()
 
-        # Write simulation related information in footer for each output log file
-        #self.out.write("\n===================================================\n")
-        #self.out.write("SIMULATION COMPLETED IN: " + str(elapsedTime) + " SECONDS\n")
-        #self.out.write("SIMULATED EVENTS: " + str(totalEvents) + "\n")
-        #self.out.write("EVENTS PER SECOND: " + str(totalEvents/elapsedTime) + "\n")
-        #self.out.write("===================================================\n")
+    def optimisticEngine(self):
+        while self.gvt < self.endTime:
+            while self.MPI.iprobe(): # True means event in queue
+                remoteEvent = self.MPI.recvAnySize()
+        
+                if remoteEvent["GVT"]: # if message is a GVT calculation
+                    self.calcGVT(remoteEvent)
+
+                    if not self.optimistic:
+                        transit = self.MPI.allreduce(self.sends, self.MPI.SUM)
+
+                        while transit > 0:
+                            if self.MPI.iprobe():
+                                self.sends -= 1
+                                e = self.MPI.recvAnySize()
+                                self.ec += 1
+                                heapq.heappush(self.eventQueue, (e["time"], self.ec, e))
+                            transit = self.MPI.allreduce(self.sends, self.MPI.SUM)
+                    
+                        self.sends = 0
+                        if self.rank == 0: print ("----> Switch to CONS " + str(self.gvt))
+                        sys.stdout.flush()
+                        return 
+                else:
+                    if not remoteEvent["antimessage"] and remoteEvent["color"] == "white": self.whiteMsg -= 1
+
+                    self.sends -= 1
+                    self.ec += 1
+                    heapq.heappush(self.eventQueue, (remoteEvent["time"], self.ec, remoteEvent))
+
+            for i in range(self.fel):
+                if len(self.eventQueue): self.processNextEvent()
+                else: break
+                
+            if self.rank == 0 and self.color == "white":
+                if self.gvtCounter >= self.gvtInterval:
+                    self.kickoffGVT()
+                    self.gvtCounter = 0
+                else: self.gvtCounter += 1
+
+    def kickoffGVT(self):
+        self.countRound = 0
+        self.color = "red"
+        LPVT = self.infTime
+
+        #for entType in self.entities:
+        #    for ent in self.entities[entType]:
+        #        en = self.entities[entType][ent]
+        #        if en.VT < LPVT: LPVT = en.VT   # LPVT = min time
+
+        if len(self.eventQueue): LPVT = min(LPVT, self.eventQueue[0][0])
+   
+        tup = {"p" : self.pos, "n" : self.neg}
+        self.pos = 0
+        self.neg = 0
+
+        #print(str(self.rank) + " kickoff GVT: " + str(LPVT) + " " + str(self.whiteMsg))
+        self.MPI.send({"m_clock" : LPVT,
+                       "m_send"  : self.infTime,
+                       "count"   : self.whiteMsg,
+                       "GVT"     : True,
+                       "GVT_broadcast" : 0,
+                       "rank"    : self.rank,
+                       "opt" : tup,
+        }, 1) # send to rank 1
+        self.whiteMsg = 0
+
+    def calcGVT(self, event): # Based off Mattern 1993 ( with added broadcast )
+        #print(str(self.rank) + " calc GVT")
+        LPVT = self.infTime # min LP's clock
+
+        if event["GVT_broadcast"]:
+            self.gvt = event["GVT_broadcast"]
+            self.color = "white"
+            self.fossilCollect(self.gvt)
+            self.t_min = self.infTime
+                
+            self.optimistic = event["opt"]
+            return
+        else:
+            #for entType in self.entities:
+            #    for ent in self.entities[entType]:
+            #        en = self.entities[entType][ent]
+            #        if en.VT < LPVT:
+            #            LPVT = en.VT
+
+            if len(self.eventQueue): LPVT = min(LPVT,self.eventQueue[0][0])
+            # LPVT is minimum time stamp belonging to an engine
+
+        if self.rank == 0: # initializer
+            event["count"] += self.whiteMsg
+            if event["count"] == 0 and self.countRound > 0:
+                self.gvt = min(event["m_clock"], min(LPVT, min(event["m_send"], self.t_min)))
+
+                eff = (event["opt"]["p"] - event["opt"]["n"]) / event["opt"]["p"] 
+                if eff <= self.switchOptThres: self.optimistic = False
+
+                #print ("OPT[" + str(self.gvt) + "] check for OPT -> " + str(eff))
+                sys.stdout.flush()
+
+                # broadcast new GVT
+                for rank in range(self.size):
+                    if not rank == self.rank:
+                        self.MPI.send({"GVT" : True,
+                                       "GVT_broadcast" : self.gvt,
+                                       "opt" : self.optimistic,
+                        }, rank)
+                   
+                self.gvtCompute += 1
+                self.whiteMsg = 0
+                self.color = "white"
+                self.t_min = self.infTime
+                self.fossilCollect(self.gvt)
+                
+            else: # send around again
+                self.countRound += 1
+
+                event["m_clock"] = LPVT
+                event["m_send"]  = min(event["m_send"], self.t_min)
+                recvRank = (self.rank + 1) % self.size
+
+                tup = {"p" : self.pos, "n" : self.neg}
+                event["opt"] = tup
+                self.pos = 0
+                self.neg = 0
+
+                self.MPI.send(event, recvRank)
+                self.whiteMsg = 0
+        else:
+            if self.color == "white":
+                self.t_min = self.infTime
+                self.color = "red"
+                
+            recvRank = (self.rank + 1) % self.size
+
+            event["opt"]["p"] = event["opt"]["p"] + self.pos
+            event["opt"]["n"] = event["opt"]["n"] + self.neg
+            self.pos = 0
+            self.neg = 0
+            
+            msg = {"m_clock" : min(event["m_clock"], LPVT),
+                   "m_send"  : min(event["m_send"] , self.t_min),
+                   "count"   : int(event["count"]) + self.whiteMsg,
+                   "GVT"     : True,
+                   "GVT_broadcast" : 0,
+                   "opt" : event["opt"],
+            }
+            self.MPI.send(msg, recvRank)
+            self.whiteMsg = 0
 
     def processNextEvent(self):
         LP = self.entities[self.eventQueue[0][2]["rx"]][self.eventQueue[0][2]["rxId"]]
-
-        if self.rank == 0 and ((len(LP.processedEvents) > self.gvtMemReq) and self.color == "white"):
-            self.kickoffGVT()
-
         (time ,_, event) = heapq.heappop(self.eventQueue) #Next event
 
         # event and counterpart are present in queue
         if self.cancelEvents(event): # TODO: see if heuristic improves perfomance
             #print(str(self.rank) + " cancel and ret")
             return
-        
-        if time > self.gvt + 5 * self.gvtThreshold:
-            #print(str(self.rank) + " ret, " + str(time))
-            self.ec += 1
-            heapq.heappush(self.eventQueue, (time, self.ec, event))
-            return
-        
-        if event["antimessage"]: #rollback
-            #print(str(self.rank) + " rollback")
-            #self.ec += 1
-            #heapq.heappush(self.eventQueue, (time, self.ec, event))
-            self.rollback(time, LP)
-        else:  # normal message
+
+        self.pos = self.pos + 1
+
+        if event["antimessage"]: self.rollback(time, LP) # Rollback
+        else:  
             if LP.VT > time: # causality violated
                #print(str(self.rank) + " causality violation")
                self.ec += 1
@@ -1822,6 +1991,7 @@ class Simian(object):
                 #print(str(self.rank) + " exe")
                 state = LP.saveState() # targetId, offset
                 LP.VT = time
+                self.now = time 
 
                 service = getattr(LP, event["name"])
                 service(event["data"], event["tx"], event["txId"])
@@ -1834,10 +2004,8 @@ class Simian(object):
         ret = False
         otherEvents = []
 
-        if event["antimessage"]:
-            event["antimessage"] = False
-        else:
-            event["antimessage"] = True
+        if event["antimessage"]: event["antimessage"] = False
+        else: event["antimessage"] = True
             
         while len(self.eventQueue) and self.eventQueue[0][0] <= event["time"]:
             (time ,_, poppedEvent) = heapq.heappop(self.eventQueue)
@@ -1848,10 +2016,8 @@ class Simian(object):
                 otherEvents.append(poppedEvent) # Actually otherNodes
 
         if ret == False:
-            if event["antimessage"]:
-                event["antimessage"] = False
-            else:
-                event["antimessage"] = True
+            if event["antimessage"]: event["antimessage"] = False
+            else: event["antimessage"] = True
 
         for x in otherEvents: 
             self.ec += 1
@@ -1872,114 +2038,20 @@ class Simian(object):
                 backup = dict(state)
                 LP.recoverAntimessages(state, time)
                 self.rollbacks += 1
+                self.neg += 1
+
                 if not len(LP.processedEvents): break
         if backup:
             LP.recoverState(backup)
         LP.VT = time
-
-    def kickoffGVT(self):
-        self.countRound = 0
-        self.color = "red"
-        LPVT = self.infTime
-
-        for entType in self.entities:
-            for ent in self.entities[entType]:
-                en = self.entities[entType][ent]
-                if en.VT < LPVT: LPVT = en.VT   # LPVT = min time
-
-        if len(self.eventQueue): LPVT = min(LPVT,self.eventQueue[0][0])
-    
-        #print(str(self.rank) + " kickoff GVT: " + str(LPVT) + " " + str(self.whiteMsg))
-        self.MPI.send({"m_clock" : LPVT,
-                       "m_send"  : self.infTime,
-                       "count"   : self.whiteMsg,
-                       "GVT"     : True,
-                       "GVT_broadcast" : 0,
-                       "rank"    : self.rank,
-        },1) # send to rank 1
-        self.whiteMsg = 0
-
-    def calcGVT(self, event): # Based off Mattern 1993 ( with added broadcast )
-        #print(str(self.rank) + " calc GVT")
-
-        if event["GVT_broadcast"]:
-            self.gvt = event["GVT_broadcast"]
-            self.color = "white"
-            self.fossilCollect(self.gvt)
-            self.t_min = self.infTime
-            return
-        else:
-            LPVT = self.infTime # min LP's clock
-            for entType in self.entities:
-                for ent in self.entities[entType]:
-                    en = self.entities[entType][ent]
-                    if en.VT < LPVT:
-                        LPVT = en.VT
-
-            if len(self.eventQueue): LPVT = min(LPVT,self.eventQueue[0][0])
-            # LPVT is minimum time stamp belonging to an engine
-
-        if self.rank == 0: # initializer
-            event["count"] += self.whiteMsg
-            if event["count"] == 0 and self.countRound > 0:
-                # finished calculating ( make sure it goes around at least once
-                self.gvt = min(event["m_clock"], min(LPVT, min(event["m_send"], self.t_min)))
-                self.gvtCompute += 1
-
-                if not self.gvt:
-                    self.gvt = -0.000000001
-                
-                # broadcast new GVT
-                self.whiteMsg = 0
-                for rank in range(self.size):
-                    if not rank == self.rank:
-                        self.MPI.send({"GVT" : True,
-                                       "GVT_broadcast" : self.gvt,
-                        } , rank)
-                   
-                #print ("GVT Found: %s" % self.gvt)
-                #sys.stdout.flush()
-
-                self.color = "white"
-                self.t_min = self.infTime
-                self.fossilCollect(self.gvt)
-                
-            else: # send around again
-                self.countRound += 1
-
-                event["m_clock"] = LPVT
-                event["m_send"]  = min(event["m_send"], self.t_min)
-                recvRank = self.rank + 1
-                if recvRank == self.size : recvRank = 0
-                self.MPI.send(event,recvRank)
-                self.whiteMsg = 0
-        else:
-            if self.color == "white":
-                self.t_min = self.infTime
-                self.color = "red"
-                
-            recvRank = self.rank + 1
-            if recvRank == self.size : recvRank = 0
-            
-            msg = {"m_clock" : min(event["m_clock"], LPVT),
-                   "m_send"  : min(event["m_send"] , self.t_min),
-                   "count"   : int(event["count"]) + self.whiteMsg,
-                   "GVT"     : True,
-                   "GVT_broadcast" : 0,
-            }
-            self.MPI.send(msg, recvRank)
-            self.whiteMsg = 0
-
                 
     def fossilCollect(self,time):
         for entityType in self.entities:
             for entity in self.entities[entityType]:
                 e = self.entities[entityType][entity]
                 for x,y in e.processedEvents:
-                    if x["time"] < time:
-                        e.processedEvents.remove((x,y))
-                    else:
-                        break
+                    if x["time"] < time: e.processedEvents.remove((x,y))
+                    else: break
 
     def schedService(self, time, eventName, data, rx, rxId):
         #Purpose: Add an event to the event-queue.

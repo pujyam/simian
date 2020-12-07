@@ -35,6 +35,7 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI)
     self.endTime = endTime or 1e100
     self.minDelay = minDelay or 1
     self.useMPI = useMPI and true or false
+    self.now = 0
 
     --Status of JITing
     self.jitStatus = jit and jit.status() or false
@@ -89,8 +90,8 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI)
     self.gvtCounter = 0 
     
     --One output file per rank
-    if self.rank == 0 then self.out = io.open("data", "a+")
-    else self.out = nil end
+    if self.rank == 0 then self.out_d = io.open("./Data/data", "a+") end
+    self.out = io.open("./Data/out." .. tostring(self.rank), "w") 
 
     -- For Cons - Opt Switch: If std_dev less than T, switch to OPT
     -- For phold
@@ -110,9 +111,10 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI)
     if self.size == 16 then self.switchConsThres = 1 end
     if self.size == 8 then self.switchConsThres = 1 end
     if self.size == 2 then self.switchConsThres = 1 end
+    --self.switchConsThres = 0 
 
     self.switchCounter = 0 
-    self.checkSwitch = 50 -- Interval to check switching conditions from CONS to OPT
+    self.checkSwitch = 50  -- Interval to check switching conditions from CONS to OPT
 
     -- Counts annti messages in CONS and same VT messages
     self.anti = 0 
@@ -128,7 +130,7 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI)
     -- For phold
     --[[
     if self.size == 128 then self.switchOptThres = 0.2 end
-    if self.size == 64 then self.switchOptThres = 0.5 end
+    if self.size == 64 then self.switchOptThres = 0.1 end
     if self.size == 32 then self.switchOptThres = 0.5 end
     if self.size == 16 then self.switchOptThres = 0.5 end
     if self.size == 8 then self.switchOptThres = 0.5 end
@@ -142,15 +144,17 @@ function Simian.init(self, simName, startTime, endTime, minDelay, useMPI)
     if self.size == 16 then self.switchOptThres = 0.2 end
     if self.size == 8 then self.switchOptThres = 0.2 end
     if self.size == 2 then self.switchOptThres = 0.2 end
+    --self.switchOptThres = -100000
 end
 
 function Simian.exit(self)
     if self.useMPI then --Exit only when all engines are ready
         if self.rank == 0 then
-            self.out:flush()
-            self.out:close()
-            self.out = nil
+            self.out_d:flush()
+            self.out_d:close()
         end
+        self.out:flush()
+        self.out:close()
         self.MPI:finalize()
     end
 end
@@ -188,8 +192,6 @@ function Simian.run(self) --Run the simulation
             end
 
             if entity.VT > event.time then -- Out-of-order msg 
-                --print("OoO EVENT: VT: " .. entity.VT .. ", e.time: " .. event.time .. 
-                --    ", gvt: " .. self.gvt .. ", anti: " .. tostring(event.antimessage))
                 self.anti = self.anti + 1
                 self:rollback(event.time, entity)
                 break
@@ -200,6 +202,8 @@ function Simian.run(self) --Run the simulation
 
             --Simulate event
             entity.VT = event.time
+            self.now = event.time
+
             local service = entity[event.name]
             service(entity, event.data, event.tx, event.txId) -- Model generate
             self.numEvents = self.numEvents + 1
@@ -211,19 +215,22 @@ function Simian.run(self) --Run the simulation
             local toRcvCount = MPI:alltoallSum() 
             local recv = toRcvCount
                 
+            --if self.rank == 0 then print ("0 CONS[" .. self.gvt .. "] - " .. tostring(recv)) end
             while toRcvCount > 0 do --Recieve all expected events in next epoch
                 MPI:probe() 
                 eventQ.push(eventQueue, MPI:recvAnySize())
                 toRcvCount = toRcvCount - 1
             end
+            --if self.rank == 0 then print ("1 CONS[" .. self.gvt .. "]") end
 
             if self.switchCounter == self.checkSwitch then
                 self.switchCounter = 0 
+                --if self.rank == 0 then print ("2 CONS[" .. self.gvt .. "]") end
 
                 --local sigma = self.MPI:allgather(#eventQueue)
                 local sigma = self.MPI:allgather(recv)
 
-                --if self.rank == 0 then print ("CONS[" .. self.gvt .. "] check for OPT " .. sigma) end
+                if self.rank == 0 then print ("CONS[" .. self.gvt .. "] check for OPT " .. sigma) end
                 if sigma <= self.switchConsThres then
 
                     if self.rank == 0 then print ("     Switch to OPT " .. self.gvt .. " " .. sigma) end
@@ -246,7 +253,6 @@ function Simian.run(self) --Run the simulation
     self.running = false
         
     if self.size > 1 then
-        MPI:barrier() --Forcibly synchronize all ranks before counting total events
         optEvents = MPI:allreduce(self.optNumEvents, MPI.SUM)
         rollEvents = MPI:allreduce(self.rollbacks, MPI.SUM)
         antiEvents = MPI:allreduce(self.antimsgSent, MPI.SUM)
@@ -275,14 +281,14 @@ function Simian.run(self) --Run the simulation
         print ("    # Same VT events: " .. sameTotal)
         print ("    Net Event Rate: " .. ((totalAllEvents - rollEvents) / elapsedClock))
         print("===========================================")
-        self.out:write((totalAllEvents - rollEvents)/elapsedClock .. "\n")
+        self.out_d:write((totalAllEvents - rollEvents)/elapsedClock .. "\n")
     end
 
     if self.size == 1 then
         print ("SIMULATION COMPLETED IN: " .. elapsedClock .. " SECONDS")
         print ("SIMULATED EVENTS: " .. numEvents)
         print ("    Event Rate: " .. (numEvents / elapsedClock))
-        self.out:write(numEvents / elapsedClock .. "\n")
+        self.out_d:write(numEvents / elapsedClock .. "\n")
     end
 end
 
@@ -343,7 +349,15 @@ function Simian.kickoffGVT(self)
     self.color = "red" 
     local LPVT = self.infTime
 
-    if #self.eventQueue > 0 then LPVT = self.eventQueue[1].time end
+    for k,entType in pairs(self.entities) do
+        for _,ent in pairs(self.entities[k]) do
+            local en = self.entities[k][_]
+
+            if en.VT < LPVT then LPVT = en.VT end -- Smallest VT in an engine among its entities
+        end
+    end
+    if #self.eventQueue > 0 then LPVT = math.min(LPVT, self.eventQueue[1].time) end
+    --if #self.eventQueue > 0 then LPVT = self.eventQueue[1].time end
 
     local t = {p = self.pos, n = self.neg}
     self.pos = 0
@@ -374,10 +388,18 @@ function Simian.calcGVT(self, event)
         self.t_min = self.infTime
 
         --print(self.rank, "GVT Found")
+        --self.now = self.gvt 
         self.optimistic = event.opt
         return
     else
-        if #self.eventQueue > 0 then LPVT = self.eventQueue[1].time end
+        for k,entType in pairs(self.entities) do
+            for _,ent in pairs(self.entities[k]) do
+                local en = self.entities[k][_]
+                if en.VT < LPVT then LPVT = en.VT end -- Smallest VT in an engine among its entities
+            end
+        end
+        if #self.eventQueue > 0 then LPVT = math.min(LPVT, self.eventQueue[1].time) end
+        --if #self.eventQueue > 0 then LPVT = self.eventQueue[1].time end
     end
 
     if self.rank == 0 then
@@ -391,6 +413,8 @@ function Simian.calcGVT(self, event)
             local eff = (event.opt.p - event.opt.n) / event.opt.p
             if eff <= self.switchOptThres then self.optimistic = false end
             --print("OPT[" .. self.gvt .. "] check for CONS ", eff)
+
+            --self.now = self.gvt 
 
             for rank = self.size-1, 1, -1 do 
                 local e = {GVT = true, GVT_broadcast = self.gvt, opt = self.optimistic,} 
@@ -478,14 +502,16 @@ function Simian.processNextEvent(self)
         else -- execute positive event
             --if self.rank == 0 then print("Execute") end
             
-            local state = copy(LP.saveState(LP)) -- Model's responsibility
+            --local state = copy(LP.saveState(LP)) -- Model's responsibility
+            local state = LP.saveState(LP) -- Model's responsibility
             LP.VT = event.time
 
             local service = LP[event.name]
             service(LP, event.data, event.tx, event.txId) -- generate() in model -> reqService() in entity
             self.optNumEvents = self.optNumEvents + 1
 
-            local state = copy(LP.saveAntimessages(LP, state))
+            --local state = copy(LP.saveAntimessages(LP, state))
+            local state = LP.saveAntimessages(LP, state)
             local t = {e = event, s = state,}
             table.insert(LP.processedEvents, t)
         end
@@ -535,9 +561,11 @@ function Simian.rollback(self, time, LP)
             --print(self.rank, " Roll ", LP.processedEvents[#(LP.processedEvents)].e.time, time)
             local t = table.remove(LP.processedEvents)  
 
-            eventQ.push(self.eventQueue, copy(t.e))
-            backup = copy(t.s)
-
+            --eventQ.push(self.eventQueue, copy(t.e))
+            --backup = copy(t.s)
+            eventQ.push(self.eventQueue, t.e)
+            backup = t.s
+            
             LP.sendAntimessages(LP, t.s, time)
             self.rollbacks = self.rollbacks + 1
             self.neg = self.neg + 1
@@ -635,6 +663,8 @@ function Simian.addEntity(self, name, entityClass, num, ...)
 
     if computedRank == self.rank then --This entity resides on this engine
         --Output log file for this Entity
+        
+        --print (name .. "[" .. num .. "]: Running on rank " .. computedRank .. "\n")
         --self.out:write(name .. "[" .. num .. "]: Running on rank " .. computedRank .. "\n")
 
         entity[num] = entityClass(name, self.out, self, num, ...) --Entity is instantiated

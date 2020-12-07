@@ -44,6 +44,8 @@ local function Entity(name, base)
         --Purpose: Send an event if Simian is running
         local engine = thisEntity.engine --Get the engine for this entity
 
+        --print(offset, engine.minDelay)
+
         if rx and offset < engine.minDelay then
             if not engine.running then
                 error("Sending event when Simian is idle!")

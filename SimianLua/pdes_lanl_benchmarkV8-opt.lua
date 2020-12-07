@@ -259,8 +259,8 @@ do
         -- 3. Set up queue size
         self.q_target = q_avg/s_ent * target_sends
         self.q_size = 1 -- number of send events scheduled ahead of time by this entity
-        --self.last_scheduled = self.engine.now -- time of last scheduled event
-        self.last_scheduled = self.VT -- time of last scheduled event
+        self.last_scheduled = self.engine.now -- time of last scheduled event
+        --self.last_scheduled = self.VT -- time of last scheduled event
 
         -- 4. Set up statistics
         self.send_count, self.receive_count, self.opsCount =  0, 0, 0 -- for stats
@@ -279,8 +279,7 @@ do
         end
 
         -- 5. Schedule FinishUp at end of time
-        --self:reqService(endTime - self.engine.now, "FinishHandler", nil)
-        --self:reqService(endTime - self.VT, "FinishHandler", nil)
+        self:reqService(endTime - self.engine.now - 1, "FinishHandler", nil)
         self:SendHandler(seed)
     end
 
@@ -294,9 +293,9 @@ do
         
         -- Generate next event for myself
         -- Reschedule myself until q is full or time has run out
-        --while (self.q_size < self.q_target) and not (self.last_scheduled > endTime) do
+        while (self.q_size < self.q_target) do --and not (self.last_scheduled > endTime) do
             local own_delay = exponential(1.0 / self.local_intersend_delay)
-            --self.last_scheduled =  self.last_scheduled + own_delay
+            self.last_scheduled =  self.last_scheduled + own_delay
 
             --if self.last_scheduled < endTime then
                 self.q_size = self.q_size + 1
@@ -305,13 +304,13 @@ do
                 --self:reqService(self.last_scheduled - self.engine.now, "SendHandler", random())
                 self:reqService(own_delay, "SendHandler", random())
             --end
-        --end
-
-		if self.engine.gvt > endTime / 2 and report then
-            p_receive = 0
-            r_min = r_min0
-            report = false
         end
+
+		--if self.engine.gvt > endTime / 2 and report then
+        --    p_receive = 0
+        --    r_min = r_min0
+        --    report = false
+        --end
 
         -- Generate computation request event to destination entity
         local DestIndex
@@ -330,11 +329,18 @@ do
     end
 
     function PDES_LANL_Node:saveState()
+    
+        --ts = {}
+        --for k,v in pairs(self.time_sends) do
+        --    ts[k] = v 
+        --end
+
         local state = {                    
 					q_size = self.q_size,
                     q_target = self.q_target,
                     last_scheduled = self.last_scheduled,
 
+                    --time_sends = ts,
 					send_count = self.send_count,
                     receive_count = self.receive_count,
                     ops_max = self.ops_max,
@@ -347,6 +353,10 @@ do
         self.q_size = state.q_size
         self.q_target = state.q_target
         self.last_scheduled = state.last_scheduled
+
+        --for k,v in pairs(state.time_sends) do
+        --    self.time_sends[k] = v 
+        --end
 
         self.send_count = state.send_count
         self.receive_count = state.receive_count
@@ -385,10 +395,12 @@ do
     function PDES_LANL_Node:FinishHandler(...) -- varargs ... is artificial
         -- Send stats to entity 0 for outputting of global stats
         local msg = {self.num, self.send_count, self.receive_count, self.ops_min, self.ops_mean, self.ops_max, self.time_sends, self.opsCount}
-        --self:reqService(minDelay, "OutputHandler", msg, "PDES_LANL_Node", 0)
+        self:reqService(minDelay, "OutputHandler", msg, "PDES_LANL_Node", 0)
     end
 
     function PDES_LANL_Node:OutputHandler(msg, ...) -- varargs ... is artificial
+        --print ("stats write")
+
         local header = string.format("%10s %10s %10s %10s %10s %10s    %q\n", "#EntityID", "#Sends", "#Receives", "Ops(Min", "Avg", "Max)", "Time Bin Sends")
         -- Write out Stats, only invoked on entity 0
         if self.stats_received == 0 then -- Only write header line a single time
@@ -410,12 +422,12 @@ do
         --self.out:write(str_out)
 
         if self.stats_received == n_ent then -- We can write out global stats
-            --self.out:write("===================== LANL PDES BENCHMARK  Collected Stats from All Ranks =======================\n")
+            self.out:write("===================== LANL PDES BENCHMARK  Collected Stats from All Ranks =======================\n")
             header = string.format("%10s %10s %10s %10s %10s %10s %10s    %q\n", "#Entities", "#Sends", "#Receives", "OpsCount", "Ops(Min", "Avg", "Max)", "Time Bin Sends")
-            --self.out:write(header)
+            self.out:write(header)
             str_out = string.format("%10d %10d %10d %10d %10d %10.5g %10d    %s\n", n_ent, self.gsend_count, self.greceive_count, self.gopsCount, self.gops_min, self.gops_mean, self.gops_max, "[" .. table.concat(self.gtime_sends, ", ") .. "]")
-            --self.out:write(str_out)
-            --self.out:write("=================================================================================================\n")
+            self.out:write(str_out)
+            self.out:write("=================================================================================================\n")
         end
     end
 end

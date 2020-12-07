@@ -1,8 +1,8 @@
 import subprocess
 import sys
 
-threads = ["8", "16", "32", "64", "128", "256"]
-n_ent = ["80", "160", "320", "640", "1280", "2560"] 
+#threads = ["8", "16", "32", "64", "128", "256"]
+#n_ent = ["80", "160", "320", "640", "1280", "2560"] 
 #n_ent = ["40", "80", "160", "320", "640", "1280"] 
 #n_ent = ["160", "320", "640", "1280", "2560"] 
 
@@ -12,8 +12,8 @@ n_ent = ["80", "160", "320", "640", "1280", "2560"]
 #threads = ["16"]
 #n_ent = ["160"] 
 
-#threads = ["32"]
-#n_ent = ["320"] 
+threads = ["32"]
+n_ent = ["320"] 
 
 #threads = ["64"]
 #n_ent = ["640"] 
@@ -30,14 +30,14 @@ print  "\nn_ent[]: ", n_ent
 q_avg = "1"
 print "q_avg: ", q_avg 
 
-ops_ent = ["1000", "10000", "100000"]
+ops_ent = ["1"]
 print "ops_ent[]: ", ops_ent
 
-ops_sigma = "1"
-cache_f = "1"
+ops_sigma = "0"
+cache_f = "0"
 print "ops_sigma: ", ops_sigma, "cache_f: ", cache_f
 
-p_recv = "0.5"
+p_recv = "0.1"
 print "p_recv: ", p_recv 
 
 end_time = "4000"
